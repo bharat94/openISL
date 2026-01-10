@@ -5,6 +5,14 @@ pub struct SmartLogFormatter {
     width: usize,
 }
 
+#[derive(Debug, Clone)]
+struct GraphNode {
+    commit: Commit,
+    position: usize,
+    is_main_branch: bool,
+    has_children: bool,
+}
+
 impl SmartLogFormatter {
     pub fn new(commits: Vec<Commit>, width: usize) -> Self {
         Self { commits, width }
@@ -18,49 +26,104 @@ impl SmartLogFormatter {
         let mut output = String::new();
         output.push_str(&format!("Smart Log ({} commits):\n\n", self.commits.len()));
 
-        for (i, commit) in self.commits.iter().enumerate() {
-            output.push_str(&self.format_commit(commit, i));
+        let graph = self.build_graph();
+        for (i, node) in graph.iter().enumerate() {
+            output.push_str(&self.format_graph_node(node, i, graph.len()));
             output.push('\n');
         }
 
         output
     }
 
-    fn format_commit(&self, commit: &Commit, index: usize) -> String {
+    fn build_graph(&self) -> Vec<GraphNode> {
+        let main_branch = self.find_main_branch();
+
+        self.commits.iter().enumerate().map(|(i, commit)| {
+            let is_main = commit.refs.iter().any(|r| {
+                r.name == main_branch || r.name == "main" || r.name == "master"
+            });
+            let has_children = self.commits.iter().any(|c| {
+                c.parent_hashes.contains(&commit.hash)
+            });
+
+            GraphNode {
+                commit: commit.clone(),
+                position: i,
+                is_main_branch: is_main,
+                has_children,
+            }
+        }).collect()
+    }
+
+    fn find_main_branch(&self) -> String {
+        for commit in &self.commits {
+            for r in &commit.refs {
+                if r.ref_type == crate::models::RefType::Head {
+                    return r.name.clone();
+                }
+            }
+        }
+        "main".to_string()
+    }
+
+    fn format_graph_node(&self, node: &GraphNode, index: usize, total: usize) -> String {
         let mut line = String::new();
 
-        if index == self.commits.len() - 1 && self.commits.len() > 1 {
-            line.push('~');
+        let is_last = index == total - 1;
+        let is_first = index == 0;
+
+        if is_first && total == 1 {
+            line.push('●');
+        } else if is_last {
+            line.push('○');
+        } else if node.has_children {
+            line.push('│');
         } else {
-            line.push('o');
+            line.push(' ');
         }
 
         line.push(' ');
-        line.push_str(&commit.short_hash);
+        line.push_str(&node.commit.short_hash);
+
+        if node.is_main_branch {
+            line.push('*');
+        } else {
+            line.push(' ');
+        }
         line.push(' ');
 
-        // Add branch info if available
-        if !commit.refs.is_empty() {
-            let branch_names: Vec<String> = commit.refs.iter()
-                .map(|r| r.name.clone())
+        if !node.commit.refs.is_empty() {
+            let branch_names: Vec<String> = node.commit.refs.iter()
+                .filter(|r| r.ref_type != crate::models::RefType::Remote)
+                .map(|r| {
+                    let name = if r.name.starts_with("refs/heads/") {
+                        &r.name[11..]
+                    } else if r.name.starts_with("refs/remotes/") {
+                        &r.name[13..]
+                    } else {
+                        &r.name
+                    };
+                    name.to_string()
+                })
                 .collect();
-            line.push('[');
-            line.push_str(&branch_names.join(", "));
-            line.push_str("] ");
+            if !branch_names.is_empty() {
+                line.push('[');
+                line.push_str(&branch_names.join(", "));
+                line.push_str("] ");
+            }
         }
 
-        // Add commit summary (truncated to fit width)
         let max_summary_len = if self.width > 0 {
             self.width.saturating_sub(50)
         } else {
             50
         };
-        let summary = if commit.summary.len() > max_summary_len {
-            &commit.summary[..max_summary_len.saturating_sub(3)]
+        let summary = if node.commit.summary.len() > max_summary_len {
+            format!("{}...", &node.commit.summary[..max_summary_len.saturating_sub(3)])
         } else {
-            &commit.summary
+            node.commit.summary.clone()
         };
-        line.push_str(summary);
+        line.push_str(&summary);
 
         line
     }
