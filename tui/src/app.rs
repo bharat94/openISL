@@ -22,6 +22,7 @@ pub enum ViewMode {
     Diff,
     Help,
     InputBranch,
+    Search,
 }
 
 pub struct App {
@@ -37,6 +38,9 @@ pub struct App {
     pub branch_input: String,
     pub repo_path: Option<std::path::PathBuf>,
     pub keybindings: KeyBindings,
+    pub search_query: String,
+    pub search_results: Vec<usize>,
+    pub is_searching: bool,
 }
 
 impl App {
@@ -54,6 +58,80 @@ impl App {
             branch_input: String::new(),
             repo_path,
             keybindings: KeyBindings::load().unwrap_or_default(),
+            search_query: String::new(),
+            search_results: Vec::new(),
+            is_searching: false,
+        }
+    }
+
+    pub fn search(&mut self) {
+        if self.search_query.is_empty() {
+            self.search_results.clear();
+            return;
+        }
+
+        self.search_results = self.commits.iter()
+            .enumerate()
+            .filter(|(_, commit)| {
+                let query = self.search_query.to_lowercase();
+                commit.summary.to_lowercase().contains(&query) ||
+                commit.message.to_lowercase().contains(&query) ||
+                commit.author.to_lowercase().contains(&query) ||
+                commit.short_hash.to_lowercase().contains(&query)
+            })
+            .map(|(i, _)| i)
+            .collect();
+
+        if !self.search_results.is_empty() {
+            self.selected_index = self.search_results[0];
+            self.scroll_offset = 0;
+        }
+    }
+
+    pub fn next_search_result(&mut self) {
+        if self.search_results.is_empty() {
+            return;
+        }
+
+        if let Some(current_pos) = self.search_results.iter().position(|&i| i == self.selected_index) {
+            if current_pos + 1 < self.search_results.len() {
+                self.selected_index = self.search_results[current_pos + 1];
+                if self.selected_index >= self.scroll_offset + 20 {
+                    self.scroll_offset = self.selected_index - 20 + 1;
+                }
+            }
+        }
+    }
+
+    pub fn prev_search_result(&mut self) {
+        if self.search_results.is_empty() {
+            return;
+        }
+
+        if let Some(current_pos) = self.search_results.iter().position(|&i| i == self.selected_index) {
+            if current_pos > 0 {
+                self.selected_index = self.search_results[current_pos - 1];
+                if self.selected_index < self.scroll_offset {
+                    self.scroll_offset = self.selected_index.saturating_sub(1);
+                }
+            }
+        }
+    }
+
+    pub fn clear_search(&mut self) {
+        self.search_query.clear();
+        self.search_results.clear();
+        self.is_searching = false;
+    }
+
+    pub fn toggle_search(&mut self) {
+        if self.is_searching && self.search_query.is_empty() {
+            self.is_searching = false;
+        } else {
+            self.is_searching = !self.is_searching;
+            if !self.is_searching {
+                self.clear_search();
+            }
         }
     }
 
@@ -64,10 +142,15 @@ impl App {
             ViewMode::Diff => self.handle_diff_key(key),
             ViewMode::Help => self.handle_help_key(key),
             ViewMode::InputBranch => self.handle_input_key(key),
+            ViewMode::Search => self.handle_search_key(key),
         }
     }
 
     fn handle_list_key(&mut self, key: KeyEvent) -> bool {
+        if self.is_searching {
+            return self.handle_search_key(key);
+        }
+
         match key.code {
             KeyCode::Char('q') => return true,
             KeyCode::Char('j') | KeyCode::Down => self.move_down(),
@@ -77,6 +160,12 @@ impl App {
             KeyCode::Home => self.go_to_start(),
             KeyCode::End => self.go_to_end(),
             KeyCode::Enter => self.view_mode = ViewMode::Details,
+            KeyCode::Char('/') => {
+                self.is_searching = true;
+                self.search_query.clear();
+            }
+            KeyCode::Char('n') if key.modifiers.contains(KeyModifiers::CONTROL) => self.next_search_result(),
+            KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => self.prev_search_result(),
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 self.fetch_diff();
                 self.view_mode = ViewMode::Diff;
@@ -93,6 +182,35 @@ impl App {
             }
             KeyCode::Char('?') => self.view_mode = ViewMode::Help,
             KeyCode::Char('t') => self.theme.toggle(),
+            _ => {}
+        }
+        false
+    }
+
+    fn handle_search_key(&mut self, key: KeyEvent) -> bool {
+        match key.code {
+            KeyCode::Esc => {
+                self.clear_search();
+                return false;
+            }
+            KeyCode::Enter => {
+                if self.search_results.is_empty() {
+                    self.clear_search();
+                }
+                return false;
+            }
+            KeyCode::Backspace => {
+                self.search_query.pop();
+                self.search();
+            }
+            KeyCode::Char('n') if key.modifiers.contains(KeyModifiers::CONTROL) => self.next_search_result(),
+            KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => self.prev_search_result(),
+            KeyCode::Char(c) => {
+                if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ' ' || c == '.' {
+                    self.search_query.push(c);
+                    self.search();
+                }
+            }
             _ => {}
         }
         false
@@ -278,6 +396,7 @@ pub fn run_tui(commits: Vec<Commit>, current_branch: String, repo_path: Option<s
                 ViewMode::Diff => render_diff_view(&app, frame),
                 ViewMode::Help => render_help_overlay(&app, frame),
                 ViewMode::InputBranch => render_input_view(&app, frame),
+                ViewMode::Search => render_search_view(&app, frame),
             }
         })?;
 
@@ -517,6 +636,75 @@ fn render_input_view(app: &App, frame: &mut ratatui::Frame) {
     help_widget.render(chunks[3], frame.buffer_mut());
 }
 
+fn render_search_view(app: &App, frame: &mut ratatui::Frame) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Length(3),
+            Constraint::Min(10),
+            Constraint::Length(2),
+        ])
+        .split(frame.size());
+
+    let title = Paragraph::new("Search Commits")
+        .style(Style::default().fg(app.theme.title).add_modifier(Modifier::BOLD))
+        .alignment(Alignment::Center);
+    title.render(chunks[0], frame.buffer_mut());
+
+    let search_info = if app.search_results.is_empty() && !app.search_query.is_empty() {
+        format!("No matches found for '{}'", app.search_query)
+    } else if !app.search_results.is_empty() {
+        format!("{} matches for '{}'", app.search_results.len(), app.search_query)
+    } else {
+        "Type to search commits (author, message, hash)".to_string()
+    };
+
+    let search_widget = Paragraph::new(format!("Search: {}\n\n{}", app.search_query, search_info))
+        .style(Style::default().fg(app.theme.text))
+        .alignment(Alignment::Left);
+    search_widget.render(chunks[1], frame.buffer_mut());
+
+    let commit_lines: Vec<String> = app
+        .visible_commits()
+        .iter()
+        .enumerate()
+        .map(|(i, commit)| {
+            let global_index = app.scroll_offset + i;
+            let is_selected = global_index == app.selected_index;
+            let is_match = app.search_results.contains(&global_index);
+            let prefix = if is_selected { ">" } else { " " };
+            let match_indicator = if is_match { "*" } else { " " };
+            format!("{} {} {} - {}", prefix, match_indicator, commit.short_hash, commit.summary)
+        })
+        .collect();
+
+    let commit_widget = Paragraph::new(commit_lines.join("\n"))
+        .style(Style::default().fg(app.theme.text))
+        .block(
+            Block::default()
+                .title(format!(
+                    "Results ({}/{}) - {}",
+                    app.search_results.len().max(1),
+                    app.commits.len(),
+                    app.current_branch
+                ))
+                .borders(Borders::ALL)
+                .border_type(BorderType::Plain)
+                .style(Style::default().fg(app.theme.border)),
+        );
+    commit_widget.render(chunks[2], frame.buffer_mut());
+
+    let help_text = format!(
+        "Ctrl+N/P: Next/Prev match | Enter: View | /: Search | Esc: Cancel | Theme: {}",
+        app.theme.name()
+    );
+    let help_widget = Paragraph::new(help_text)
+        .style(Style::default().fg(app.theme.help))
+        .alignment(Alignment::Center);
+    help_widget.render(chunks[3], frame.buffer_mut());
+}
+
 fn render_help_overlay(app: &App, frame: &mut ratatui::Frame) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -547,6 +735,8 @@ Actions:
   {}         Create branch from commit
   {}         View diff
   {}         Toggle dark/light theme
+  /           Search commits
+  Ctrl+N/P    Next/prev search result
 
 Other:
   {}         Show this help
@@ -799,5 +989,61 @@ mod tests {
 
         app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::SHIFT));
         assert_eq!(app.view_mode, ViewMode::Diff);
+    }
+
+    #[test]
+    fn test_search_toggle() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        assert!(!app.is_searching);
+        assert!(app.search_query.is_empty());
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        assert!(app.is_searching);
+    }
+
+    #[test]
+    fn test_search_functionality() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.search_query = "First".to_string();
+        app.search();
+
+        assert_eq!(app.search_results.len(), 1);
+        assert_eq!(app.search_results[0], 0);
+    }
+
+    #[test]
+    fn test_search_navigation() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.search_query = "commit".to_string();
+        app.search();
+
+        assert_eq!(app.search_results.len(), 2);
+
+        app.next_search_result();
+        assert_eq!(app.selected_index, app.search_results[1]);
+
+        app.prev_search_result();
+        assert_eq!(app.selected_index, app.search_results[0]);
+    }
+
+    #[test]
+    fn test_search_clear() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.search_query = "test".to_string();
+        app.search();
+        assert!(!app.search_results.is_empty());
+
+        app.clear_search();
+        assert!(app.search_query.is_empty());
+        assert!(app.search_results.is_empty());
+        assert!(!app.is_searching);
     }
 }
