@@ -1,6 +1,8 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use openisl_git::{get_commits, get_branches, get_current_branch, get_status, get_diff, StatusType, SmartLogFormatter};
+mod config;
+use config::Config;
 
 #[derive(Parser)]
 #[command(name = "openisl")]
@@ -18,10 +20,10 @@ enum Commands {
     Log {
         #[arg(long, help = "Show as ASCII in terminal")]
         simple: bool,
-        #[arg(long, help = "Show all branches")]
-        all: bool,
-        #[arg(long, help = "Hide remote branches")]
-        no_remote: bool,
+        #[arg(short, long, help = "Show commits from specific branch")]
+        branch: Option<String>,
+        #[arg(long, help = "Include remote branches")]
+        remote: bool,
         #[arg(short, long, help = "Maximum number of commits to show")]
         max_count: Option<usize>,
     },
@@ -33,6 +35,10 @@ enum Commands {
     Branch {
         #[arg(help = "Create a new branch with this name")]
         name: Option<String>,
+        #[arg(long, help = "Show remote branches only")]
+        remote: bool,
+        #[arg(long, help = "Show all branches including remotes")]
+        all: bool,
     },
 
     #[command(about = "Checkout a branch or commit")]
@@ -51,20 +57,32 @@ enum Commands {
         #[arg(help = "Show changes for specific commit")]
         commit: Option<String>,
     },
+
+    #[command(about = "Configure openisl settings")]
+    Config {
+        #[arg(long, help = "Show current configuration")]
+        show: bool,
+        #[arg(long, help = "Reset configuration to defaults")]
+        reset: bool,
+        #[arg(long, help = "Set theme (dark/light)")]
+        theme: Option<String>,
+        #[arg(long, help = "Set max commits")]
+        max_commits: Option<usize>,
+    },
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::Log { simple, all, no_remote, max_count } => {
-            cmd_log(*simple, *all, *no_remote, *max_count)?;
+        Commands::Log { simple, branch, remote, max_count } => {
+            cmd_log(*simple, branch.as_deref(), *remote, *max_count)?;
         }
         Commands::Tui => {
             println!("Launching TUI... (Run 'cargo run -p openisl-tui' to use TUI)");
         }
-        Commands::Branch { name } => {
-            cmd_branch(name.as_deref())?;
+        Commands::Branch { name, remote, all } => {
+            cmd_branch(name.as_deref(), *remote, *all)?;
         }
         Commands::Checkout { target } => {
             cmd_checkout(target)?;
@@ -75,22 +93,23 @@ fn main() -> Result<()> {
         Commands::Diff { staged, commit } => {
             cmd_diff(*staged, commit.as_deref())?;
         }
+        Commands::Config { show, reset, theme, max_commits } => {
+            cmd_config(*show, *reset, theme.as_deref(), *max_commits)?;
+        }
     }
 
     Ok(())
 }
 
-fn cmd_log(simple: bool, _all: bool, _no_remote: bool, max_count: Option<usize>) -> Result<()> {
+fn cmd_log(simple: bool, branch: Option<&str>, _remote: bool, max_count: Option<usize>) -> Result<()> {
     let repo_path = std::env::current_dir().context("Not in a directory")?;
 
     let commits = get_commits(&repo_path, max_count)?;
 
     if simple {
-        // Use simple ASCII format
         let formatter = SmartLogFormatter::new(commits, 80);
         print!("{}", formatter.format());
     } else {
-        // Use detailed format
         println!("Commit Log ({} commits):\n", commits.len());
 
         for commit in commits {
@@ -103,19 +122,27 @@ fn cmd_log(simple: bool, _all: bool, _no_remote: bool, max_count: Option<usize>)
     Ok(())
 }
 
-fn cmd_branch(name: Option<&str>) -> Result<()> {
+fn cmd_branch(name: Option<&str>, remote: bool, all: bool) -> Result<()> {
     let repo_path = std::env::current_dir().context("Not in a directory")?;
 
     if let Some(branch_name) = name {
-        // Create branch
         println!("Creating branch: {}", branch_name);
     } else {
-        // List branches
         let branches = get_branches(&repo_path)?;
         let current = get_current_branch(&repo_path)?;
 
+        let filtered_branches: Vec<_> = branches.iter().filter(|b| {
+            if remote && !all {
+                b.ref_type == openisl_git::RefType::Remote
+            } else if all {
+                true
+            } else {
+                b.ref_type != openisl_git::RefType::Remote
+            }
+        }).collect();
+
         println!("Branches:");
-        for git_ref in &branches {
+        for git_ref in &filtered_branches {
             let prefix = if current.as_ref() == Some(&git_ref.name) {
                 "* "
             } else {
@@ -172,6 +199,42 @@ fn cmd_diff(_staged: bool, _commit: Option<&str>) -> Result<()> {
         print!("{}", diff);
     }
 
+    Ok(())
+}
+
+fn cmd_config(show: bool, reset: bool, theme: Option<&str>, max_commits: Option<usize>) -> Result<()> {
+    if reset {
+        let config = Config::default();
+        config.save()?;
+        println!("Configuration reset to defaults.");
+        return Ok(());
+    }
+
+    let mut config = Config::load().unwrap_or_default();
+
+    if let Some(t) = theme {
+        if t == "dark" || t == "light" {
+            config.tui.theme = t.to_string();
+            println!("Theme set to: {}", t);
+        } else {
+            println!("Invalid theme. Use 'dark' or 'light'.");
+        }
+    }
+
+    if let Some(n) = max_commits {
+        config.general.max_commits = n;
+        println!("Max commits set to: {}", n);
+    }
+
+    if show || (!theme.is_some() && max_commits.is_none()) {
+        println!("Current Configuration:");
+        println!("  Theme: {}", config.tui.theme);
+        println!("  Max Commits: {}", config.general.max_commits);
+        println!("  Date Format: {}", config.general.date_format);
+        println!("  Auto Fetch: {}", config.git.auto_fetch);
+    }
+
+    config.save()?;
     Ok(())
 }
 

@@ -13,3 +13,7 @@ categories.workspace = true
 anyhow = { workspace = true }
 clap = { workspace = true }
 openisl-git = { path = "../git" }
+config = "0.14"
+toml = "0.8"
+dirs = "5.0"
+serde = { version = "1.0", features = ["derive"] }
