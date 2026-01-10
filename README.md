@@ -9,24 +9,24 @@
 ## Overview
 
 openISL is a command-line tool that provides:
-- **Intelligent Stack Detection**: Analyzes and understands technology relationships and patterns
-- **Smart Git Interface**: Unified commands with context-aware suggestions and safety features
-- **Interactive TUI**: Progressive interface that adapts to your workflow
-- **Repository Agnostic**: Works with any git repository, regardless of language or framework
+- **Smart Log Visualization**: Clear, concise view of git commit history
+- **User-Friendly Git Commands**: Simplified interface for common git operations
+- **Interactive TUI**: Progressive terminal UI for exploring commit history
+- **Repository Agnostic**: Works with any git repository
 
 ## Features
 
 ### 🚀 Core Functionality
-- **Intelligent Stack Analysis**: Detects technologies, relationships, patterns, and best practices
-- **Smart Git Operations**: Context-aware commands with auto-suggestions and conflict detection
-- **Progressive TUI**: Adapts interface complexity to your expertise level
-- **Universal Compatibility**: Works with any git repository - monorepo, polyrepo, or single project
+- **Smart Log**: Sapling-style commit tree visualization with branch relationships
+- **Simplified Git Commands**: Intuitive wrappers around git operations
+- **Interactive TUI**: Keyboard-driven exploration of commit history
+- **Performance Optimized**: Fast operations on repositories with 1000+ commits
 
 ### 🎯 Key Benefits
-- **Smart Automation**: Suggests commands, commits, and workflows based on context
-- **Deep Understanding**: Relationships between components, not just a list of technologies
-- **Safe-by-Default**: Dry-run mode, conflict prevention, and destructive operation confirmation
-- **Progressive Learning**: Adapts to your workflow patterns over time
+- **Clear Visualization**: ASCII art commit tree shows branch relationships at a glance
+- **Easy Navigation**: Browse commits, branches, and diffs with keyboard shortcuts
+- **Safe Operations**: Confirmation prompts for destructive actions
+- **Fast Performance**: Optimized for smooth interaction with large repositories
 
 ## Installation
 
@@ -45,45 +45,67 @@ cargo install openisl
 
 ## Quick Start
 
-### Analyze Project Stack
+### Prerequisites
+- Rust 1.70 or later
+- Git 2.0 or later
+
+### Installation
+
+From source:
 ```bash
-# Navigate to any git repository
-cd /path/to/your/project
-
-# Display stack information
-openisl stack
-
-# Interactive stack viewer with detailed breakdown
-openisl stack --interactive
+git clone https://github.com/bharat94/openISL.git
+cd openISL
+cargo build --release
+cargo install --path .
 ```
 
-### Using Unified Git Commands
+Or using cargo:
 ```bash
-# Save changes with consistent interface
-openisl save "Add user authentication feature"
+cargo install openisl
+```
 
-# Create new branch
+### Usage
+
+```bash
+# Navigate to a git repository
+cd /path/to/your/project
+
+# View commit log (interactive TUI)
+openisl log
+
+# View commit log as ASCII in terminal
+openisl log --simple
+
+# List all branches
+openisl branch
+
+# Create a new branch
 openisl branch feature/new-feature
 
-# Sync with remote
-openisl sync
+# Checkout a branch or commit
+openisl checkout develop
 
-# View changes
-openisl changes
+# View repository status
+openisl status
+
+# View changes (diff)
+openisl diff
 ```
 
 ### Interactive TUI
-```bash
-# Launch interactive terminal UI
-openisl tui
 
-# Shows:
-# - Project structure visualization
-# - Stack composition
-# - Git history
-# - Branch management
-# - Quick actions
+Launch the interactive smart log viewer:
+```bash
+openisl log
 ```
+
+Keyboard shortcuts (in TUI):
+- `j` / `k` or `↑` / `↓`: Navigate commits
+- `Enter`: View commit details
+- `c`: Checkout selected commit
+- `b`: Create branch from commit
+- `q` or `Esc`: Quit
+- `?`: Show help
 
 ## Documentation
 
@@ -91,12 +113,12 @@ Our documentation follows the [Diátaxis Framework](https://diataxis.fr/) for cl
 
 ### Tutorials
 - [Getting Started](docs/tutorials/getting-started.md) - Your first steps with openISL
-- [Stack Detection](docs/tutorials/stack-detection.md) - Understanding stack analysis
-- [Git Operations](docs/tutorials/git-operations.md) - Unified git commands
+- [Understanding Smart Log](docs/tutorials/understanding-smartlog.md) - How to read the commit tree
+- [Git Operations](docs/tutorials/git-operations.md) - Common workflows
 
 ### How-to Guides
 - [Installing openISL](docs/how-to-guides/installation.md) - Installation methods
-- [Configuring Detection](docs/how-to-guides/configuring-detection.md) - Customize stack analysis
+- [Configuring openISL](docs/how-to-guides/configuration.md) - Customize behavior
 - [Integration with CI/CD](docs/how-to-guides/ci-integration.md) - Use in pipelines
 
 ### Reference
@@ -106,7 +128,7 @@ Our documentation follows the [Diátaxis Framework](https://diataxis.fr/) for cl
 
 ### Explanation
 - [Architecture Overview](docs/explanation/architecture.md) - System design
-- [Stack Detection Algorithm](docs/explanation/detection-algorithm.md) - How analysis works
+- [Smart Log Algorithm](docs/explanation/smartlog-algorithm.md) - How commit tree works
 - [Git Abstraction Layer](docs/explanation/git-abstraction.md) - Command mapping
 
 ## Contribution
@@ -139,23 +161,29 @@ See [Open Source Standards](OPEN_SOURCE_STANDARDS.md) for complete details.
 
 ## Roadmap
 
-### v0.1.0 (Current)
-- [ ] Basic stack detection
-- [ ] Core git abstraction commands
-- [ ] Basic TUI interface
-- [ ] Repository analysis
+### v0.1.0 (Current - In Progress)
+- [x] Workspace structure setup
+- [ ] Git abstraction layer (CLI wrapper)
+- [ ] Core CLI commands (log, branch, checkout, status, diff)
+- [ ] ASCII smart log visualization
 
 ### v0.2.0 (Planned)
-- [ ] Advanced stack visualization
-- [ ] Custom detection rules
-- [ ] Plugin system
-- [ ] Configuration profiles
+- [ ] Interactive TUI with commit tree
+- [ ] Keyboard navigation
+- [ ] Dark theme preset
+- [ ] Performance optimizations
 
-### v1.0.0 (Future)
-- [ ] Full git porcelain implementation
-- [ ] Multi-repo support
-- [ ] Stack comparison tool
-- [ ] Export stack as diagram
+### v0.3.0 (Planned)
+- [ ] Interactive commit operations (checkout, create branch)
+- [ ] Commit details view
+- [ ] Help overlay
+- [ ] Diff viewer in TUI
+
+### v0.4.0 (Planned)
+- [ ] Configuration file support
+- [ ] Branch filtering options
+- [ ] Enhanced graph visualization
+- [ ] Keyboard customization
 
 ## License
 

@@ -15,6 +15,13 @@ categories = ["command-line-utilities", "development-tools"]
 
 [workspace.dependencies]
 # Shared workspace dependencies
+anyhow = "1.0"
+thiserror = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+ratatui = "0.26"
+crossterm = "0.27"
+serde = { version = "1.0", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }
 
 [workspace.metadata]
 # Add metadata here that applies to all workspace members
