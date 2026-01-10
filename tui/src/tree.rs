@@ -82,9 +82,7 @@ impl CommitTree {
         }
         processed.insert(commit.hash.clone());
 
-        let is_main = commit.refs.iter().any(|r| {
-            r.name == "main" || r.name == "master" || r.name.ends_with("/main") || r.name.ends_with("/master")
-        });
+        let is_main = commit.refs.iter().any(|r| r.ref_type == openisl_git::RefType::Head);
 
         let children_hashes = parent_map.get(&commit.hash).map(|v| v.clone()).unwrap_or_default();
         let is_merge = children_hashes.len() > 1 || commit.parent_hashes.len() > 1;
@@ -146,7 +144,7 @@ impl CommitTree {
     }
 }
 
-pub fn format_tree_node(node: &TreeNode, is_last: bool, selected: bool) -> String {
+pub fn format_tree_node(node: &TreeNode, is_last: bool, _selected: bool) -> String {
     let mut line = String::new();
 
     for lane in &node.branch_lanes {
@@ -182,10 +180,6 @@ pub fn format_tree_node(node: &TreeNode, is_last: bool, selected: bool) -> Strin
     }
     line.push(' ');
 
-    if selected {
-        line.push('[');
-    }
-
     let hash_part = if node.is_main_branch {
         format!("{}*", node.commit.short_hash)
     } else {
@@ -214,26 +208,20 @@ pub fn format_tree_node(node: &TreeNode, is_last: bool, selected: bool) -> Strin
     }
     content.push_str(&format!(" - {}", node.commit.summary));
 
-    if selected {
-        line.push_str(&content);
-        line.push(']');
-    } else {
-        line.push_str(&content);
-    }
+    line.push_str(&content);
 
     line
 }
 
-pub fn format_tree_lines(commits: &[TreeNode], selected_index: usize, visible_start: usize, visible_count: usize) -> Vec<String> {
+pub fn format_tree_lines(commits: &[TreeNode], visible_start: usize, visible_count: usize) -> Vec<String> {
     commits.iter()
         .skip(visible_start)
         .take(visible_count)
         .enumerate()
         .map(|(i, node)| {
-            let global_index = visible_start + i;
-            let is_last = global_index == commits.len() - 1;
-            let is_selected = global_index == selected_index;
-            format_tree_node(node, is_last, is_selected)
+            let _global_index = visible_start + i;
+            let is_last = _global_index == commits.len() - 1;
+            format_tree_node(node, is_last, false)
         })
         .collect()
 }
@@ -308,7 +296,8 @@ mod tests {
         let commits = vec![create_test_commit("abc123def456789", "Test commit", vec![])];
         let tree = CommitTree::new(commits);
         let node = &tree.nodes()[0];
-        let line = format_tree_node(node, false, true);
-        assert!(line.contains("[abc123d - Test commit]"), "Expected line to contain selected format, got: {}", line);
+        let line = format_tree_node(node, false, false);
+        assert!(line.contains("abc123d"), "Expected line to contain hash, got: {}", line);
+        assert!(line.contains("Test commit"), "Expected line to contain summary, got: {}", line);
     }
 }

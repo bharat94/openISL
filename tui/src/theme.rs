@@ -9,6 +9,8 @@ pub struct Theme {
     pub title: Color,
     pub border: Color,
     pub help: Color,
+    pub selected: Color,
+    pub selected_bg: Color,
 }
 
 impl Theme {
@@ -20,6 +22,8 @@ impl Theme {
             title: Color::Cyan,
             border: Color::White,
             help: Color::DarkGray,
+            selected: Color::White,
+            selected_bg: Color::DarkGray,
         }
     }
 
@@ -31,6 +35,8 @@ impl Theme {
             title: Color::Blue,
             border: Color::Black,
             help: Color::Gray,
+            selected: Color::Black,
+            selected_bg: Color::Gray,
         }
     }
 

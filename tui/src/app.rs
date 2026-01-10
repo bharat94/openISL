@@ -6,7 +6,7 @@ use crossterm::{
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
+    prelude::{Color, Modifier, Style, Line},
     widgets::{Block, BorderType, Borders, Paragraph, Widget},
     Terminal,
 };
@@ -444,15 +444,26 @@ fn render_list_view(app: &App, frame: &mut ratatui::Frame) {
     title.render(chunks[0], frame.buffer_mut());
 
     let visible_count = 20;
-    let tree_lines = format_tree_lines(
+    let raw_lines = format_tree_lines(
         app.tree.nodes(),
-        app.selected_index,
         app.scroll_offset,
         visible_count,
     );
 
-    let commit_widget = Paragraph::new(tree_lines.join("\n"))
-        .style(Style::default().fg(app.theme.text))
+    let lines: Vec<Line> = raw_lines.iter().enumerate().map(|(i, line)| {
+        let global_index = app.scroll_offset + i;
+        let is_selected = global_index == app.selected_index;
+
+        if is_selected {
+            Line::from(line.as_str())
+                .style(Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD).bg(app.theme.selected_bg))
+        } else {
+            Line::from(line.as_str())
+                .style(Style::default().fg(app.theme.text))
+        }
+    }).collect();
+
+    let commit_widget = Paragraph::new(lines)
         .block(
             Block::default()
                 .title(format!(
