@@ -15,3 +15,6 @@ ratatui = { workspace = true }
 crossterm = { workspace = true }
 openisl-git = { path = "../git" }
 chrono = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+dirs = "5.0"

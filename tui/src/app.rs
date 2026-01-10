@@ -13,6 +13,7 @@ use ratatui::{
 use std::io::stdout;
 use openisl_git::{Commit, get_commit_diff};
 use crate::theme::Theme;
+use crate::keybindings::KeyBindings;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ViewMode {
@@ -35,6 +36,7 @@ pub struct App {
     pub status_message: String,
     pub branch_input: String,
     pub repo_path: Option<std::path::PathBuf>,
+    pub keybindings: KeyBindings,
 }
 
 impl App {
@@ -51,6 +53,7 @@ impl App {
             status_message: String::new(),
             branch_input: String::new(),
             repo_path,
+            keybindings: KeyBindings::load().unwrap_or_default(),
         }
     }
 
@@ -349,7 +352,14 @@ fn render_list_view(app: &App, frame: &mut ratatui::Frame) {
     status_widget.render(chunks[2], frame.buffer_mut());
 
     let help_text = format!(
-        "Enter: Details | c: Checkout | b: New Branch | D: Diff | ?: Help | t: Theme | q: Quit | Theme: {}",
+        "{}: Details | {}: Checkout | {}: New Branch | {}: Diff | {}: Help | {}: Theme | {}: Quit | Theme: {}",
+        app.keybindings.actions.view_details,
+        app.keybindings.actions.checkout,
+        app.keybindings.actions.create_branch,
+        app.keybindings.actions.view_diff,
+        app.keybindings.actions.help,
+        app.keybindings.actions.toggle_theme,
+        app.keybindings.actions.quit,
         app.theme.name()
     );
     let help_widget = Paragraph::new(help_text)
@@ -399,7 +409,13 @@ fn render_details_view(app: &App, frame: &mut ratatui::Frame) {
     status_widget.render(chunks[2], frame.buffer_mut());
 
     let help_text = format!(
-        "c: Checkout | b: New Branch | D: Diff | j/k: Navigate | q/Esc: Back | Theme: {}",
+        "{}: Checkout | {}: New Branch | {}: Diff | {}: Navigate | {}/{}: Back | Theme: {}",
+        app.keybindings.actions.checkout,
+        app.keybindings.actions.create_branch,
+        app.keybindings.actions.view_diff,
+        app.keybindings.navigation.up,
+        app.keybindings.actions.quit,
+        app.keybindings.actions.cancel,
         app.theme.name()
     );
     let help_widget = Paragraph::new(help_text)
@@ -440,7 +456,13 @@ fn render_diff_view(app: &App, frame: &mut ratatui::Frame) {
         );
     diff_widget.render(chunks[1], frame.buffer_mut());
 
-    let help_text = format!("q/Esc: Back | ?: Help | Theme: {}", app.theme.name());
+    let help_text = format!(
+        "{}/{}: Back | {}: Help | Theme: {}",
+        app.keybindings.actions.quit,
+        app.keybindings.actions.cancel,
+        app.keybindings.actions.help,
+        app.theme.name()
+    );
     let help_widget = Paragraph::new(help_text)
         .style(Style::default().fg(app.theme.help))
         .alignment(Alignment::Center);
@@ -483,7 +505,12 @@ fn render_input_view(app: &App, frame: &mut ratatui::Frame) {
         .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD));
     input_display.render(chunks[2], frame.buffer_mut());
 
-    let help_text = format!("Esc: Cancel | Enter: Create | Theme: {}", app.theme.name());
+    let help_text = format!(
+        "{}: Cancel | {}: Create | Theme: {}",
+        app.keybindings.actions.cancel,
+        app.keybindings.actions.confirm,
+        app.theme.name()
+    );
     let help_widget = Paragraph::new(help_text)
         .style(Style::default().fg(app.theme.help))
         .alignment(Alignment::Center);
@@ -505,25 +532,41 @@ fn render_help_overlay(app: &App, frame: &mut ratatui::Frame) {
         .alignment(Alignment::Center);
     title.render(chunks[0], frame.buffer_mut());
 
-    let help_content = r#"Navigation:
-  j / k / ↑ / ↓    Move up and down
-  PageUp / PageDown  Jump by page
-  Home / End        Go to first/last
+    let help_content = format!(
+        r#"Navigation:
+  {}         Move up
+  {}         Move down
+  {}         Jump page up
+  {}         Jump page down
+  {}         Go to first
+  {}         Go to last
 
 Actions:
-  Enter             View commit details
-  c                 Checkout selected commit
-  b                 Create branch from commit
-  Shift+D           View diff
-  t                 Toggle dark/light theme
+  {}         View commit details
+  {}         Checkout selected commit
+  {}         Create branch from commit
+  {}         View diff
+  {}         Toggle dark/light theme
 
 Other:
-  ?                 Show this help
-  q / Esc           Quit or go back
+  {}         Show this help
+  {}         Quit or go back
 
-Mouse:
-  Click arrows      Navigate commits
-  Scroll wheel      Scroll through list"#;
+Customize: Edit ~/.config/openisl/keybindings.toml"#,
+        app.keybindings.navigation.up,
+        app.keybindings.navigation.down,
+        app.keybindings.navigation.page_up,
+        app.keybindings.navigation.page_down,
+        app.keybindings.navigation.go_to_start,
+        app.keybindings.navigation.go_to_end,
+        app.keybindings.actions.view_details,
+        app.keybindings.actions.checkout,
+        app.keybindings.actions.create_branch,
+        app.keybindings.actions.view_diff,
+        app.keybindings.actions.toggle_theme,
+        app.keybindings.actions.help,
+        app.keybindings.actions.quit,
+    );
 
     let help_widget = Paragraph::new(help_content)
         .style(Style::default().fg(app.theme.text))
@@ -537,7 +580,11 @@ Mouse:
         );
     help_widget.render(chunks[1], frame.buffer_mut());
 
-    let help_text = format!("Press q, Esc, or ? to close | Theme: {}", app.theme.name());
+    let help_text = format!(
+        "Press {} to close | Theme: {}",
+        app.keybindings.actions.help,
+        app.theme.name()
+    );
     let help_widget = Paragraph::new(help_text)
         .style(Style::default().fg(app.theme.help))
         .alignment(Alignment::Center);

@@ -703,8 +703,11 @@ dependencies = [
  "anyhow",
  "chrono",
  "crossterm",
+ "dirs",
  "openisl-git",
  "ratatui",
+ "serde",
+ "toml",
 ]
 
 [[package]]
