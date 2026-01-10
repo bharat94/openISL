@@ -1,0 +1,20 @@
+[workspace]
+members = ["cli", "tui", "stack", "git"]
+
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Bharat <bharat@example.com>"]
+license = "MIT"
+repository = "https://github.com/bharat94/openISL"
+readme = "README.md"
+keywords = ["cli", "tui", "git", "stack", "developer-tools"]
+categories = ["command-line-utilities", "development-tools"]
+
+[workspace.dependencies]
+# Shared workspace dependencies
+
+[workspace.metadata]
+# Add metadata here that applies to all workspace members
