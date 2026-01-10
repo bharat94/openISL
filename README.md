@@ -194,6 +194,12 @@ See [Open Source Standards](OPEN_SOURCE_STANDARDS.md) for complete details.
 - [x] Keyboard customization (keybindings.toml)
 - **Released**: 2026-01-10
 
+### v0.5.0 (In Progress)
+- [x] Stash support (list, push, pop, apply, drop, show)
+- [x] Commit search functionality in TUI
+- [x] Ctrl+N/P for search result navigation
+- [x] Search by message, author, hash, summary
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
