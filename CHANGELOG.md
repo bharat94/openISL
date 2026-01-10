@@ -6,6 +6,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-01-10
+
+### Added
+
+#### Interactive TUI
+- Ratatui-based terminal user interface
+- `openisl tui` command to launch interactive viewer
+- App struct with commits, selection, and scroll state
+- Keyboard navigation (j/k, arrows, PageUp/PageDown, Home/End)
+- Help overlay (press ? to toggle)
+- Commit list widget with selection highlighting
+- Commit hash, summary, and branch tag display
+- Support for 100 commits with 20-line viewport
+- Mouse capture and raw mode terminal handling
+
+#### TUI Testing
+- Unit tests for App navigation (move_down, move_up, go_to_start, go_to_end)
+- Tests for visible commits pagination
+- Tests for help overlay toggle
+- Tests for keyboard quit handling
+
+#### TUI Documentation
+- docs/tui-reference/tui.md with complete usage guide
+- Keyboard shortcuts table
+- Interface layout diagram
+- Color scheme documentation
+- Performance notes and requirements
+
+### Changed
+- CLI now includes `tui` command (placeholder for binary launch)
+- Updated Roadmap in README to show v0.2.0 progress
+
 ## [0.1.0] - 2026-01-10
 
 ### Changed
