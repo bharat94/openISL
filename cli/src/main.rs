@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use openisl_git::{get_commits, get_branches, get_current_branch, get_status, get_diff, StatusType, SmartLogFormatter};
+use openisl_git::{get_commits, get_branches, get_current_branch, get_status, get_diff, StatusType, SmartLogFormatter, remote_list, tag_list, remote_remove, create_tag, delete_tag};
 mod config;
 use config::Config;
 
@@ -69,6 +69,28 @@ enum Commands {
         #[arg(long, help = "Set max commits")]
         max_commits: Option<usize>,
     },
+
+    #[command(about = "Manage git remotes")]
+    Remote {
+        #[arg(long, help = "List all remotes")]
+        list: bool,
+        #[arg(help = "Add a remote")]
+        add: Option<String>,
+        #[arg(help = "Remove a remote")]
+        remove: Option<String>,
+    },
+
+    #[command(about = "Manage git tags")]
+    Tag {
+        #[arg(long, help = "List all tags")]
+        list: bool,
+        #[arg(help = "Create a tag")]
+        create: Option<String>,
+        #[arg(long, help = "Delete a tag")]
+        delete: Option<String>,
+        #[arg(short, long, help = "Tag message for annotated tag")]
+        message: Option<String>,
+    },
 }
 
 fn main() -> Result<()> {
@@ -96,12 +118,18 @@ fn main() -> Result<()> {
         Commands::Config { show, reset, theme, max_commits } => {
             cmd_config(*show, *reset, theme.as_deref(), *max_commits)?;
         }
+        Commands::Remote { list, add, remove } => {
+            cmd_remote(*list, add.as_deref(), remove.as_deref())?;
+        }
+        Commands::Tag { list, create, delete, message } => {
+            cmd_tag(*list, create.as_deref(), delete.as_deref(), message.as_deref())?;
+        }
     }
 
     Ok(())
 }
 
-fn cmd_log(simple: bool, branch: Option<&str>, _remote: bool, max_count: Option<usize>) -> Result<()> {
+fn cmd_log(simple: bool, _branch: Option<&str>, _remote: bool, max_count: Option<usize>) -> Result<()> {
     let repo_path = std::env::current_dir().context("Not in a directory")?;
 
     let commits = get_commits(&repo_path, max_count)?;
@@ -235,6 +263,51 @@ fn cmd_config(show: bool, reset: bool, theme: Option<&str>, max_commits: Option<
     }
 
     config.save()?;
+    Ok(())
+}
+
+fn cmd_remote(list: bool, add: Option<&str>, remove: Option<&str>) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+
+    if list {
+        let remotes = remote_list(&repo_path)?;
+        if remotes.is_empty() {
+            println!("No remotes configured");
+        } else {
+            for remote in remotes {
+                println!("{}  {} ({})", remote.name, remote.url, remote.fetch_type.trim());
+            }
+        }
+    } else if let Some(_name) = add {
+        println!("Use 'openisl remote add <name> <url>' - URL argument needed");
+    } else if let Some(name) = remove {
+        remote_remove(&repo_path, name)?;
+        println!("Removed remote '{}'", name);
+    }
+
+    Ok(())
+}
+
+fn cmd_tag(list: bool, create: Option<&str>, delete: Option<&str>, message: Option<&str>) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+
+    if list {
+        let tags = tag_list(&repo_path)?;
+        if tags.is_empty() {
+            println!("No tags found");
+        } else {
+            for tag in tags {
+                println!("{}", tag.name);
+            }
+        }
+    } else if let Some(name) = create {
+        create_tag(&repo_path, name, message, None)?;
+        println!("Created tag '{}'", name);
+    } else if let Some(name) = delete {
+        delete_tag(&repo_path, name)?;
+        println!("Deleted tag '{}'", name);
+    }
+
     Ok(())
 }
 
