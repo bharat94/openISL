@@ -4,29 +4,29 @@
 [![CI/CD](https://img.shields.io/badge/CI%2FCD-Passing-success.svg)](https://github.com/bharat94/openISL/actions)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.1%20adopted-ff69b4.svg)](https://www.contributor-covenant.org/version/2/1/)
 
-**openISL** - Open Infrastructure & Stack Layer - A CLI tool that provides a unified, user-friendly interface for version control and project stack visualization in any git repository.
+**openISL** - Interactive Smart Log - An intelligent CLI/TUI tool that enhances developer productivity with smart version control, project understanding, and contextual insights for any git repository.
 
 ## Overview
 
 openISL is a command-line tool that provides:
-- **Stack Detection**: Automatically analyzes and displays the technology stack of any git repository
-- **Unified Git Interface**: Abstracts away complex git commands with intuitive, consistent alternatives
-- **Terminal UI (TUI)**: Interactive visual interface for stack browsing and project management
+- **Intelligent Stack Detection**: Analyzes and understands technology relationships and patterns
+- **Smart Git Interface**: Unified commands with context-aware suggestions and safety features
+- **Interactive TUI**: Progressive interface that adapts to your workflow
 - **Repository Agnostic**: Works with any git repository, regardless of language or framework
 
 ## Features
 
 ### 🚀 Core Functionality
-- **Stack Visualization**: Automatically detect and display project technologies (languages, frameworks, databases, tools)
-- **Git Abstraction Layer**: Provide user-friendly commands that map to standard git operations
-- **Interactive TUI**: Navigate your project stack and git operations through an intuitive terminal interface
+- **Intelligent Stack Analysis**: Detects technologies, relationships, patterns, and best practices
+- **Smart Git Operations**: Context-aware commands with auto-suggestions and conflict detection
+- **Progressive TUI**: Adapts interface complexity to your expertise level
 - **Universal Compatibility**: Works with any git repository - monorepo, polyrepo, or single project
 
 ### 🎯 Key Benefits
-- **Reduce Git Complexity**: Common operations become simple, intuitive commands
-- **Immediate Stack Understanding**: Visual representation of your project's technology footprint
-- **Unified Workflow**: Single tool for git operations and stack management
-- **Developer-Friendly**: Designed following CLI/TUI best practices for modern developers
+- **Smart Automation**: Suggests commands, commits, and workflows based on context
+- **Deep Understanding**: Relationships between components, not just a list of technologies
+- **Safe-by-Default**: Dry-run mode, conflict prevention, and destructive operation confirmation
+- **Progressive Learning**: Adapts to your workflow patterns over time
 
 ## Installation
 
@@ -176,4 +176,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**openISL** - Making version control and stack understanding accessible to all developers.
+**openISL** - Your intelligent companion for version control and project understanding. It doesn't just simplify git - it makes you smarter by providing context, insights, and automation that adapt to how you work.

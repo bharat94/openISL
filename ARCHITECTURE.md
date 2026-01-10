@@ -15,10 +15,10 @@ This document provides an overview of the openISL system architecture, its compo
 
 ## System Overview
 
-openISL is a command-line tool that provides:
-1. **Stack Detection**: Analyzes git repositories to identify technology stack
-2. **Git Abstraction**: Provides unified interface for git operations
-3. **TUI (Terminal UI)**: Interactive visualization and management
+openISL (Interactive Smart Log) is an intelligent command-line tool that provides:
+1. **Smart Stack Analysis**: Analyzes git repositories to identify technology stack, relationships, patterns, and insights
+2. **Intelligent Git Interface**: Provides unified interface for git operations with context-aware suggestions
+3. **Adaptive TUI**: Progressive terminal UI that adapts to user expertise and workflow
 
 ### High-Level Architecture
 
@@ -26,45 +26,48 @@ openISL is a command-line tool that provides:
 ┌─────────────────────────────────────────────────────────┐
 │                   User Interface Layer                 │
 │  ┌────────────────────────────────────────────┐     │
-│  │         CLI & TUI Components          │     │
+│  │         CLI & Adaptive TUI          │     │
 │  └────────────────────┬───────────────────┘     │
 │                       │                              │
 └───────────────────────┼──────────────────────────┘
-                        │
+                         │
 ┌───────────────────────┴──────────────────────────┐
 │                 Application Layer               │
 │  ┌────────────────────────────────────────────┐     │
-│  │   Command Parser & Dispatcher            │     │
+│  │ Command Dispatcher & Intelligence      │     │
 │  └───────────┬──────────────────────────┘     │
 │                │                                   │
 └────────────────┼───────────────────────────────────┘
-                 │
+                  │
 ┌────────────────┴───────────────────────────────────┐
 │               Core Modules Layer                │
 │  ┌──────────┬──────────┬──────────┬────────┐│
-│  │  Stack    │   Git     │   TUI   │ Config ││
-│  │ Detector  │Abstraction│ Engine  │ Manager ││
+│  │  Smart    │  Smart   │ Adaptive│ Config ││
+│  │ Stack     │   Git   │   TUI   │ Manager ││
+│  │ Analysis  │Abstraction│ Engine  │        ││
 │  └──────────┴──────────┴──────────┴────────┘│
 └──────────────────────────────────────────────────────┘
 ```
 
 ## Core Components
 
-### 1. Stack Detector Module
+### 1. Smart Stack Analysis Module
 
-**Purpose**: Analyze repository and identify technologies
+**Purpose**: Analyze repository and identify technologies, relationships, patterns, and insights
 
 **Responsibilities**:
 - Scan repository files (package.json, Cargo.toml, go.mod, etc.)
-- Parse dependency files
+- Parse dependency files and detect relationships
 - Detect languages, frameworks, databases, tools
-- Build technology tree/graph
-- Generate stack summary
+- Build technology tree/graph with relationship mapping
+- Generate stack summary with insights (best practices, anti-patterns, security concerns)
+- Analyze code patterns and usage statistics
 
 **Key Design Decisions**:
 - **Parser-based architecture**: Separate parser for each ecosystem (Node, Rust, Python, etc.)
+- **Intelligence layer**: Pattern recognition and context-aware analysis
 - **Extensibility**: New ecosystem support via plugin system (future)
-- **Caching**: Cache results for performance
+- **Caching**: Cache intelligent analysis results for performance
 
 **Data Flow**:
 ```
@@ -72,61 +75,70 @@ Repository File System
          ↓
     File Parser (ecosystem-specific)
          ↓
-    Dependency Extractor
+    Dependency Extractor + Relationship Analyzer
          ↓
-    Technology Classifier
+    Technology Classifier + Pattern Detector
          ↓
-    Stack Model (JSON/Tree)
+    Smart Stack Analysis (relationships, insights, best practices)
+         ↓
+    Stack Model (JSON/Tree with intelligence)
 ```
 
-### 2. Git Abstraction Module
+### 2. Smart Git Abstraction Module
 
-**Purpose**: Provide user-friendly commands mapping to git operations
+**Purpose**: Provide intelligent, user-friendly commands with context-aware suggestions for git operations
 
 **Responsibilities**:
 - Parse openISL commands
-- Map to git subcommands
-- Execute git operations safely
-- Provide helpful error messages
-- Handle edge cases and edge behavior
+- Map to git subcommands with smart enhancements
+- Execute git operations safely with intelligence
+- Provide helpful error messages with actionable suggestions
+- Handle edge cases with smart resolution guidance
+- Detect and prevent common mistakes
+- Suggest optimal workflows based on context
 
 **Key Design Decisions**:
-- **Command mapping**: Simple mapping (`openisl save` → `git commit`)
+- **Smart command mapping**: Enhanced mapping with intelligence (`openisl save` → `git commit` + auto-staging + suggestions)
+- **Context-aware suggestions**: Suggest commands and workflows based on project state
 - **Validation**: Validate operations before execution
 - **Dry-run mode**: Preview changes without executing
-- **Safety checks**: Confirm destructive operations
+- **Safety checks**: Confirm destructive operations, detect conflicts early
 
 **Command Examples**:
 ```
-openisl save [message]  → git commit -m [message]
-openisl branch [name]   → git checkout -b [name]
-openisl sync            → git pull + status check
-openisl undo            → git reset HEAD~1
+openisl save [message]  → git commit -m [message] + auto-stage related files + suggest message
+openisl branch [name]   → git checkout -b [name] + conflict detection
+openisl sync            → git pull + status check + conflict resolution guidance
+openisl undo            → git reset HEAD~1 + backup creation + impact preview
+openisl analyze         → Smart analysis of repository state + suggestions
 ```
 
-### 3. TUI Engine Module
+### 3. Adaptive TUI Engine Module
 
-**Purpose**: Interactive terminal user interface
+**Purpose**: Progressive terminal user interface that adapts to user expertise and workflow
 
 **Responsibilities**:
 - Render components (lists, trees, forms)
 - Handle keyboard input and navigation
-- Display stack visualization
-- Show git history and operations
-- Manage application state
+- Display smart stack visualization with relationships
+- Show git history and operations with context
+- Manage application state with progressive disclosure
+- Adapt interface complexity based on user expertise
 
 **Key Design Decisions**:
-- **Framework**: Use [Bubble](https://github.com/Populate/bubble) or similar Rust TUI library
+- **Framework**: Use [ratatui](https://github.com/ratatui-org/ratatui) for Rust TUI
 - **Component-based**: Reusable UI components
 - **State management**: Central state with reactive updates
+- **Progressive disclosure**: Show advanced features based on context/expertise
 - **Accessibility**: Keyboard-first, screen reader support
 
 **UI Components**:
-- Stack tree viewer
-- File browser
-- Git history viewer
-- Command palette
-- Help system
+- Stack tree viewer with relationships
+- File browser with context-aware preview
+- Git history viewer with commit graph
+- Smart command palette with suggestions
+- Context-aware help system
+- Progressive complexity modes (beginner/intermediate/advanced)
 
 ### 4. Configuration Manager
 

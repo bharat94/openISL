@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Update project name meaning to "Interactive Smart Log" (not "Open Infrastructure & Stack Layer")
+- Update README with "smart" vision and intelligent features
+- Update ARCHITECTURE.md to reflect smart stack analysis and adaptive TUI
+- Update tagline to emphasize intelligent, context-aware features
+
 ### Added
 - Initial project setup and open source standards documentation
 - Documentation structure following Diátaxis Framework
