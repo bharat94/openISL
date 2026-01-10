@@ -5,5 +5,5 @@ pub mod diff;
 
 pub use log::get_commits;
 pub use branch::{get_branches, get_current_branch};
-pub use status::get_status;
+pub use status::{get_status, StatusType, FileStatus};
 pub use diff::get_diff;
