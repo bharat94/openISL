@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use std::path::Path;
-use openisl_git::{get_commits, get_branches, get_current_branch, get_status, get_diff, StatusType, FileStatus};
+use openisl_git::{get_commits, get_branches, get_current_branch, get_status, get_diff, StatusType, FileStatus, SmartLogFormatter};
 
 #[derive(Parser)]
 #[command(name = "openisl")]
@@ -81,16 +81,24 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn cmd_log(_simple: bool, _all: bool, _no_remote: bool, max_count: Option<usize>) -> Result<()> {
+fn cmd_log(simple: bool, _all: bool, _no_remote: bool, max_count: Option<usize>) -> Result<()> {
     let repo_path = std::env::current_dir().context("Not in a directory")?;
 
     let commits = get_commits(&repo_path, max_count)?;
-    println!("Commit Log ({} commits):\n", commits.len());
 
-    for commit in commits {
-        println!("{} - {}", commit.short_hash, commit.summary);
-        println!("  Author: {} <{}>", commit.author, commit.email);
-        println!("  Date:   {}\n", commit.date);
+    if simple {
+        // Use simple ASCII format
+        let formatter = SmartLogFormatter::new(commits, 80);
+        print!("{}", formatter.format());
+    } else {
+        // Use detailed format
+        println!("Commit Log ({} commits):\n", commits.len());
+
+        for commit in commits {
+            println!("{} - {}", commit.short_hash, commit.summary);
+            println!("  Author: {} <{}>", commit.author, commit.email);
+            println!("  Date:   {}\n", commit.date);
+        }
     }
 
     Ok(())
