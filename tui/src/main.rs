@@ -8,7 +8,7 @@ fn main() -> anyhow::Result<()> {
     let commits = get_commits(&repo_path, Some(100))?;
     let current_branch = "main".to_string();
 
-    run_tui(commits, current_branch)?;
+    run_tui(commits, current_branch, Some(repo_path))?;
 
     Ok(())
 }

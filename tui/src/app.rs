@@ -11,7 +11,7 @@ use ratatui::{
     Terminal,
 };
 use std::io::stdout;
-use openisl_git::Commit;
+use openisl_git::{Commit, get_commit_diff};
 use crate::theme::Theme;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -34,10 +34,11 @@ pub struct App {
     pub diff_content: String,
     pub status_message: String,
     pub branch_input: String,
+    pub repo_path: Option<std::path::PathBuf>,
 }
 
 impl App {
-    pub fn new(commits: Vec<Commit>, current_branch: String) -> Self {
+    pub fn new(commits: Vec<Commit>, current_branch: String, repo_path: Option<std::path::PathBuf>) -> Self {
         Self {
             commits,
             selected_index: 0,
@@ -49,6 +50,7 @@ impl App {
             diff_content: String::new(),
             status_message: String::new(),
             branch_input: String::new(),
+            repo_path,
         }
     }
 
@@ -73,11 +75,12 @@ impl App {
             KeyCode::End => self.go_to_end(),
             KeyCode::Enter => self.view_mode = ViewMode::Details,
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.fetch_diff();
                 self.view_mode = ViewMode::Diff;
             }
             KeyCode::Char('c') => {
                 if let Some(commit) = self.selected_commit() {
-                    self.status_message = format!("Checking out {}...", &commit.short_hash);
+                    self.status_message = format!("Would checkout {}...", &commit.short_hash);
                 }
             }
             KeyCode::Char('b') => {
@@ -102,7 +105,7 @@ impl App {
             KeyCode::Char('k') | KeyCode::Up => self.move_up(),
             KeyCode::Char('c') => {
                 if let Some(commit) = self.selected_commit() {
-                    self.status_message = format!("Checked out {}!", &commit.short_hash);
+                    self.status_message = format!("Would checkout {}!", &commit.short_hash);
                 }
             }
             KeyCode::Char('b') => {
@@ -111,6 +114,7 @@ impl App {
                 self.status_message = "Enter branch name (or Esc to cancel):".to_string();
             }
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.fetch_diff();
                 self.view_mode = ViewMode::Diff;
             }
             _ => {}
@@ -237,9 +241,22 @@ impl App {
             }
         )
     }
+
+    pub fn fetch_diff(&mut self) {
+        if let Some(commit) = self.selected_commit() {
+            if let Some(ref repo_path) = self.repo_path {
+                match get_commit_diff(repo_path, &commit.hash) {
+                    Ok(diff) => self.diff_content = diff,
+                    Err(e) => self.diff_content = format!("Error fetching diff: {}", e),
+                }
+            } else {
+                self.diff_content = "No repository path available".to_string();
+            }
+        }
+    }
 }
 
-pub fn run_tui(commits: Vec<Commit>, current_branch: String) -> Result<()> {
+pub fn run_tui(commits: Vec<Commit>, current_branch: String, repo_path: Option<std::path::PathBuf>) -> Result<()> {
     let mut stdout = stdout();
 
     enable_raw_mode()?;
@@ -248,7 +265,7 @@ pub fn run_tui(commits: Vec<Commit>, current_branch: String) -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
 
-    let mut app = App::new(commits, current_branch);
+    let mut app = App::new(commits, current_branch, repo_path);
 
     loop {
         terminal.draw(|frame| {
@@ -562,7 +579,7 @@ mod tests {
     #[test]
     fn test_app_navigation_down() {
         let commits = create_test_commits();
-        let mut app = App::new(commits, "main".to_string());
+        let mut app = App::new(commits, "main".to_string(), None);
 
         assert_eq!(app.selected_index, 0);
         app.move_down();
@@ -572,7 +589,7 @@ mod tests {
     #[test]
     fn test_app_navigation_up() {
         let commits = create_test_commits();
-        let mut app = App::new(commits, "main".to_string());
+        let mut app = App::new(commits, "main".to_string(), None);
 
         app.selected_index = 1;
         app.move_up();
@@ -582,7 +599,7 @@ mod tests {
     #[test]
     fn test_view_mode_transitions() {
         let commits = create_test_commits();
-        let mut app = App::new(commits, "main".to_string());
+        let mut app = App::new(commits, "main".to_string(), None);
 
         assert_eq!(app.view_mode, ViewMode::List);
 
@@ -602,7 +619,7 @@ mod tests {
     #[test]
     fn test_branch_input_mode() {
         let commits = create_test_commits();
-        let mut app = App::new(commits, "main".to_string());
+        let mut app = App::new(commits, "main".to_string(), None);
 
         assert_eq!(app.view_mode, ViewMode::List);
         assert!(app.branch_input.is_empty());
@@ -628,12 +645,12 @@ mod tests {
     #[test]
     fn test_checkout_key() {
         let commits = create_test_commits();
-        let mut app = App::new(commits, "main".to_string());
+        let mut app = App::new(commits, "main".to_string(), None);
 
         assert!(app.status_message.is_empty());
 
         app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
-        assert!(app.status_message.contains("Checking out"));
+        assert!(app.status_message.contains("Would checkout"));
     }
 
     #[test]
@@ -667,7 +684,7 @@ mod tests {
     #[test]
     fn test_visible_commits() {
         let commits = create_test_commits();
-        let app = App::new(commits, "main".to_string());
+        let app = App::new(commits, "main".to_string(), None);
 
         let visible = app.visible_commits();
         assert_eq!(visible.len(), 2);
@@ -676,7 +693,7 @@ mod tests {
     #[test]
     fn test_selected_commit() {
         let commits = create_test_commits();
-        let mut app = App::new(commits, "main".to_string());
+        let mut app = App::new(commits, "main".to_string(), None);
 
         assert_eq!(app.selected_commit().unwrap().short_hash, "abc123d");
 
@@ -687,7 +704,7 @@ mod tests {
     #[test]
     fn test_format_commit_details() {
         let commits = create_test_commits();
-        let app = App::new(commits, "main".to_string());
+        let app = App::new(commits, "main".to_string(), None);
         let commit = app.selected_commit().unwrap();
 
         let details = app.format_commit_details(commit);
@@ -700,7 +717,7 @@ mod tests {
     #[test]
     fn test_quit_from_list() {
         let commits = create_test_commits();
-        let mut app = App::new(commits, "main".to_string());
+        let mut app = App::new(commits, "main".to_string(), None);
 
         let quit_event = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE);
         let should_quit = app.handle_key(quit_event);
@@ -710,12 +727,30 @@ mod tests {
     #[test]
     fn test_help_mode_exit() {
         let commits = create_test_commits();
-        let mut app = App::new(commits, "main".to_string());
+        let mut app = App::new(commits, "main".to_string(), None);
 
         app.view_mode = ViewMode::Help;
         let quit_event = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
         let should_quit = app.handle_key(quit_event);
         assert!(!should_quit);
         assert_eq!(app.view_mode, ViewMode::List);
+    }
+
+    #[test]
+    fn test_fetch_diff_no_repo() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.fetch_diff();
+        assert_eq!(app.diff_content, "No repository path available");
+    }
+
+    #[test]
+    fn test_diff_view_sets_content() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::SHIFT));
+        assert_eq!(app.view_mode, ViewMode::Diff);
     }
 }
