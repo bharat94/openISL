@@ -27,6 +27,9 @@ enum Commands {
         max_count: Option<usize>,
     },
 
+    #[command(about = "Launch interactive TUI for commit history")]
+    Tui,
+
     #[command(about = "List, create, or delete branches")]
     Branch {
         #[arg(help = "Create a new branch with this name")]
@@ -60,6 +63,9 @@ fn main() -> Result<()> {
     match &cli.command {
         Commands::Log { simple, all, no_remote, max_count } => {
             cmd_log(*simple, *all, *no_remote, *max_count)?;
+        }
+        Commands::Tui => {
+            println!("Launching TUI... (Run 'cargo run -p openisl-tui' to use TUI)");
         }
         Commands::Branch { name } => {
             cmd_branch(name.as_deref())?;
