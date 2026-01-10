@@ -14,6 +14,7 @@ use std::io::stdout;
 use openisl_git::{Commit, get_commit_diff};
 use crate::theme::Theme;
 use crate::keybindings::KeyBindings;
+use crate::tree::{CommitTree, format_tree_lines};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ViewMode {
@@ -41,6 +42,7 @@ pub struct App {
     pub search_query: String,
     pub search_results: Vec<usize>,
     pub is_searching: bool,
+    pub tree: CommitTree,
 }
 
 impl App {
@@ -61,7 +63,15 @@ impl App {
             search_query: String::new(),
             search_results: Vec::new(),
             is_searching: false,
+            tree: CommitTree::new(Vec::new()),
         }
+    }
+
+    pub fn set_commits(&mut self, commits: Vec<Commit>) {
+        self.commits = commits;
+        self.tree = CommitTree::new(self.commits.clone());
+        self.selected_index = 0;
+        self.scroll_offset = 0;
     }
 
     pub fn search(&mut self) {
@@ -386,7 +396,8 @@ pub fn run_tui(commits: Vec<Commit>, current_branch: String, repo_path: Option<s
     let mut terminal = Terminal::new(backend)?;
     terminal.clear()?;
 
-    let mut app = App::new(commits, current_branch, repo_path);
+    let mut app = App::new(commits.clone(), current_branch, repo_path);
+    app.set_commits(commits);
 
     loop {
         terminal.draw(|frame| {
@@ -432,24 +443,20 @@ fn render_list_view(app: &App, frame: &mut ratatui::Frame) {
         .alignment(Alignment::Center);
     title.render(chunks[0], frame.buffer_mut());
 
-    let commit_lines: Vec<String> = app
-        .visible_commits()
-        .iter()
-        .enumerate()
-        .map(|(i, commit)| {
-            let global_index = app.scroll_offset + i;
-            let is_selected = global_index == app.selected_index;
-            let prefix = if is_selected { ">" } else { " " };
-            format!("{} {} - {}", prefix, commit.short_hash, commit.summary)
-        })
-        .collect();
+    let visible_count = 20;
+    let tree_lines = format_tree_lines(
+        app.tree.nodes(),
+        app.selected_index,
+        app.scroll_offset,
+        visible_count,
+    );
 
-    let commit_widget = Paragraph::new(commit_lines.join("\n"))
+    let commit_widget = Paragraph::new(tree_lines.join("\n"))
         .style(Style::default().fg(app.theme.text))
         .block(
             Block::default()
                 .title(format!(
-                    "Commits ({}/{}) - {}",
+                    "Commits ({}/{}) - {} - ● main ○ branch",
                     app.selected_index + 1,
                     app.commits.len(),
                     app.current_branch
