@@ -169,18 +169,22 @@ See [Open Source Standards](OPEN_SOURCE_STANDARDS.md) for complete details.
 - [x] Unit tests and documentation
 - **Released**: 2026-01-10
 
-### v0.2.0 (Current - In Progress)
+### v0.2.0 (Released!)
 - [x] Interactive TUI with commit tree
 - [x] Keyboard navigation
 - [x] TUI documentation
-- [ ] Dark theme preset
-- [ ] Performance optimizations
+- [x] Dark/Light theme presets with toggle
+- [x] TUI unit tests (10 tests)
+- **Released**: 2026-01-10
 
-### v0.3.0 (Planned)
-- [ ] Interactive commit operations (checkout, create branch)
-- [ ] Commit details view
-- [ ] Help overlay
-- [ ] Diff viewer in TUI
+### v0.3.0 (In Progress)
+- [x] Interactive commit details view
+- [x] Help overlay with keyboard shortcuts
+- [x] ViewMode enum (List, Details, Diff, Help)
+- [x] View transitions (Enter, Esc, Shift+D)
+- [ ] Interactive checkout from TUI
+- [ ] Interactive branch creation from TUI
+- [ ] Diff viewer with actual diff content
 
 ### v0.4.0 (Planned)
 - [ ] Configuration file support

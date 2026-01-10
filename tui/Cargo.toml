@@ -14,3 +14,4 @@ anyhow = { workspace = true }
 ratatui = { workspace = true }
 crossterm = { workspace = true }
 openisl-git = { path = "../git" }
+chrono = { workspace = true }

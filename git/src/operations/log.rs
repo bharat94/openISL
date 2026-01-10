@@ -2,15 +2,17 @@ use anyhow::{Context, Result};
 use chrono::DateTime;
 use std::path::Path;
 use crate::command::run;
-use crate::models::{Commit, GitRef, RefType};
+use crate::models::Commit;
 
-const GIT_LOG_FORMAT: &str = "%H|%P|%an|%ae|%ad|%s|%b";
+const GIT_LOG_FORMAT: &str = "%H|%P|%an|%ae|%ad|%s";
 
 pub fn get_commits(repo_path: &Path, max_count: Option<usize>) -> Result<Vec<Commit>> {
-    let mut args = vec!["log", "--all", "--date=iso", &format!("--format={}", GIT_LOG_FORMAT)];
+    let format_arg = format!("--format={}", GIT_LOG_FORMAT);
+    let n_arg = max_count.map(|n| format!("-n{}", n));
 
-    if let Some(n) = max_count {
-        args.push(&format!("-n{}", n));
+    let mut args: Vec<&str> = vec!["log", "--all", "--date=iso", &format_arg];
+    if let Some(ref n) = n_arg {
+        args.push(n);
     }
 
     let output = run(&args, Some(repo_path))
@@ -21,7 +23,7 @@ pub fn get_commits(repo_path: &Path, max_count: Option<usize>) -> Result<Vec<Com
 
 fn parse_commits(output: &str) -> Result<Vec<Commit>> {
     let mut commits = Vec::new();
-    let records: Vec<&str> = output.trim_end().split("\n\n").collect();
+    let records: Vec<&str> = output.trim_end().split("\n").collect();
 
     for record in records {
         if record.trim().is_empty() {
@@ -53,7 +55,34 @@ fn parse_commit(record: &str) -> Option<Commit> {
     let author = parts[2].to_string();
     let email = parts[3].to_string();
 
-    let date = DateTime::parse_from_rfc3339(parts[4])
+    let date_str = parts[4]
+        .replace(" +0000", "+00:00")
+        .replace(" +0100", "+01:00")
+        .replace(" +0200", "+02:00")
+        .replace(" +0300", "+03:00")
+        .replace(" +0400", "+04:00")
+        .replace(" +0500", "+05:00")
+        .replace(" +0530", "+05:30")
+        .replace(" +0600", "+06:00")
+        .replace(" +0700", "+07:00")
+        .replace(" +0800", "+08:00")
+        .replace(" +0900", "+09:00")
+        .replace(" +1000", "+10:00")
+        .replace(" -0000", "-00:00")
+        .replace(" -0100", "-01:00")
+        .replace(" -0200", "-02:00")
+        .replace(" -0300", "-03:00")
+        .replace(" -0400", "-04:00")
+        .replace(" -0500", "-05:00")
+        .replace(" -0530", "-05:30")
+        .replace(" -0600", "-06:00")
+        .replace(" -0700", "-07:00")
+        .replace(" -0800", "-08:00")
+        .replace(" -0900", "-09:00")
+        .replace(" -1000", "-10:00")
+        .replace(' ', "T");
+
+    let date = DateTime::parse_from_rfc3339(&date_str)
         .map(|d| d.with_timezone(&chrono::Utc))
         .ok()?;
 

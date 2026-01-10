@@ -1,5 +1,5 @@
 [workspace]
-members = ["cli", "tui", "stack", "git"]
+members = ["cli", "tui", "git"]
 
 resolver = "2"
 

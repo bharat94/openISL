@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use std::path::Path;
-use openisl_git::{get_commits, get_branches, get_current_branch, get_status, get_diff, StatusType, FileStatus, SmartLogFormatter};
+use openisl_git::{get_commits, get_branches, get_current_branch, get_status, get_diff, StatusType, SmartLogFormatter};
 
 #[derive(Parser)]
 #[command(name = "openisl")]
@@ -52,9 +51,6 @@ enum Commands {
         #[arg(help = "Show changes for specific commit")]
         commit: Option<String>,
     },
-
-    #[command(about = "Print help information")]
-    Help,
 }
 
 fn main() -> Result<()> {
@@ -78,9 +74,6 @@ fn main() -> Result<()> {
         }
         Commands::Diff { staged, commit } => {
             cmd_diff(*staged, commit.as_deref())?;
-        }
-        Commands::Help => {
-            println!("{}", Cli::command().render_help());
         }
     }
 

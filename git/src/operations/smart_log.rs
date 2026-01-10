@@ -29,12 +29,7 @@ impl SmartLogFormatter {
     fn format_commit(&self, commit: &Commit, index: usize) -> String {
         let mut line = String::new();
 
-        // Add graph character based on position
-        if index == 0 && self.commits.len() == 1 {
-            line.push('o');
-        } else if index == 0 {
-            line.push('o');
-        } else if index == self.commits.len() - 1 {
+        if index == self.commits.len() - 1 && self.commits.len() > 1 {
             line.push('~');
         } else {
             line.push('o');
