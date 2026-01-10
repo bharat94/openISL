@@ -89,6 +89,7 @@ Repository File System
 **Purpose**: Provide intelligent, user-friendly commands with context-aware suggestions for git operations
 
 **Responsibilities**:
+- Detect git repositories and find repo root from any subdirectory
 - Parse openISL commands
 - Map to git subcommands with smart enhancements
 - Execute git operations safely with intelligence
@@ -111,6 +112,21 @@ openisl branch [name]   → git checkout -b [name] + conflict detection
 openisl sync            → git pull + status check + conflict resolution guidance
 openisl undo            → git reset HEAD~1 + backup creation + impact preview
 openisl analyze         → Smart analysis of repository state + suggestions
+```
+
+**Data Flow**:
+```
+User Command
+     ↓
+Repository Detection (find .git directory)
+     ↓
+Git Command Execution (via CLI wrapper)
+     ↓
+Output Parsing
+     ↓
+Data Models (Commit, GitRef, etc.)
+     ↓
+UI/CLI Display
 ```
 
 ### 3. Adaptive TUI Engine Module
