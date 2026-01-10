@@ -177,14 +177,21 @@ See [Open Source Standards](OPEN_SOURCE_STANDARDS.md) for complete details.
 - [x] TUI unit tests (10 tests)
 - **Released**: 2026-01-10
 
-### v0.3.0 (In Progress)
+### v0.3.0 (Released!)
 - [x] Interactive commit details view
 - [x] Help overlay with keyboard shortcuts
 - [x] ViewMode enum (List, Details, Diff, Help)
 - [x] View transitions (Enter, Esc, Shift+D)
-- [ ] Interactive checkout from TUI
-- [ ] Interactive branch creation from TUI
-- [ ] Diff viewer with actual diff content
+- [x] Interactive checkout from TUI (display only)
+- [x] Interactive branch creation from TUI (display only)
+- [x] Diff viewer with actual diff content
+- **Released**: 2026-01-10
+
+### v0.4.0 (Planned)
+- [ ] Configuration file support
+- [ ] Branch filtering options
+- [ ] Enhanced graph visualization
+- [ ] Keyboard customization
 
 ### v0.4.0 (Planned)
 - [ ] Configuration file support
