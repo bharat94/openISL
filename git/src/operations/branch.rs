@@ -46,6 +46,20 @@ pub fn get_current_branch(repo_path: &Path) -> Result<Option<String>> {
     }
 }
 
+pub fn create_branch(repo_path: &Path, branch_name: &str) -> Result<()> {
+    let args = vec!["branch", branch_name];
+    run(&args, Some(repo_path))
+        .with_context(|| format!("Failed to create branch '{}'", branch_name))?;
+    Ok(())
+}
+
+pub fn create_branch_from_commit(repo_path: &Path, branch_name: &str, commit_hash: &str) -> Result<()> {
+    let args = vec!["checkout", "-b", branch_name, commit_hash];
+    run(&args, Some(repo_path))
+        .with_context(|| format!("Failed to create branch '{}' from '{}'", branch_name, commit_hash))?;
+    Ok(())
+}
+
 pub fn get_refs_for_commit(_repo_path: &Path, _hash: &str) -> Result<Vec<GitRef>> {
     todo!("Implement get_refs_for_commit")
 }

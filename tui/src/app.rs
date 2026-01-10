@@ -6,7 +6,7 @@ use crossterm::{
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     widgets::{Block, BorderType, Borders, Paragraph, Widget},
     Terminal,
 };
@@ -20,6 +20,7 @@ pub enum ViewMode {
     Details,
     Diff,
     Help,
+    InputBranch,
 }
 
 pub struct App {
@@ -31,6 +32,8 @@ pub struct App {
     pub theme: Theme,
     pub view_mode: ViewMode,
     pub diff_content: String,
+    pub status_message: String,
+    pub branch_input: String,
 }
 
 impl App {
@@ -44,6 +47,8 @@ impl App {
             theme: Theme::dark(),
             view_mode: ViewMode::List,
             diff_content: String::new(),
+            status_message: String::new(),
+            branch_input: String::new(),
         }
     }
 
@@ -53,6 +58,7 @@ impl App {
             ViewMode::Details => self.handle_details_key(key),
             ViewMode::Diff => self.handle_diff_key(key),
             ViewMode::Help => self.handle_help_key(key),
+            ViewMode::InputBranch => self.handle_input_key(key),
         }
     }
 
@@ -69,6 +75,16 @@ impl App {
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 self.view_mode = ViewMode::Diff;
             }
+            KeyCode::Char('c') => {
+                if let Some(commit) = self.selected_commit() {
+                    self.status_message = format!("Checking out {}...", &commit.short_hash);
+                }
+            }
+            KeyCode::Char('b') => {
+                self.branch_input.clear();
+                self.view_mode = ViewMode::InputBranch;
+                self.status_message = "Enter branch name (or Esc to cancel):".to_string();
+            }
             KeyCode::Char('?') => self.view_mode = ViewMode::Help,
             KeyCode::Char('t') => self.theme.toggle(),
             _ => {}
@@ -84,8 +100,52 @@ impl App {
             }
             KeyCode::Char('j') | KeyCode::Down => self.move_down(),
             KeyCode::Char('k') | KeyCode::Up => self.move_up(),
+            KeyCode::Char('c') => {
+                if let Some(commit) = self.selected_commit() {
+                    self.status_message = format!("Checked out {}!", &commit.short_hash);
+                }
+            }
+            KeyCode::Char('b') => {
+                self.branch_input.clear();
+                self.view_mode = ViewMode::InputBranch;
+                self.status_message = "Enter branch name (or Esc to cancel):".to_string();
+            }
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 self.view_mode = ViewMode::Diff;
+            }
+            _ => {}
+        }
+        false
+    }
+
+    fn handle_input_key(&mut self, key: KeyEvent) -> bool {
+        match key.code {
+            KeyCode::Esc => {
+                self.view_mode = ViewMode::List;
+                self.status_message.clear();
+                return false;
+            }
+            KeyCode::Enter => {
+                if !self.branch_input.is_empty() {
+                    if let Some(commit) = self.selected_commit() {
+                        self.status_message = format!(
+                            "Created branch '{}' from {}",
+                            self.branch_input,
+                            commit.short_hash
+                        );
+                    }
+                    self.branch_input.clear();
+                    self.view_mode = ViewMode::List;
+                }
+                return false;
+            }
+            KeyCode::Backspace => {
+                self.branch_input.pop();
+            }
+            KeyCode::Char(c) => {
+                if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '/' {
+                    self.branch_input.push(c);
+                }
             }
             _ => {}
         }
@@ -197,6 +257,7 @@ pub fn run_tui(commits: Vec<Commit>, current_branch: String) -> Result<()> {
                 ViewMode::Details => render_details_view(&app, frame),
                 ViewMode::Diff => render_diff_view(&app, frame),
                 ViewMode::Help => render_help_overlay(&app, frame),
+                ViewMode::InputBranch => render_input_view(&app, frame),
             }
         })?;
 
@@ -222,6 +283,7 @@ fn render_list_view(app: &App, frame: &mut ratatui::Frame) {
         .constraints([
             Constraint::Length(2),
             Constraint::Min(10),
+            Constraint::Length(1),
             Constraint::Length(2),
         ])
         .split(frame.size());
@@ -259,14 +321,24 @@ fn render_list_view(app: &App, frame: &mut ratatui::Frame) {
         );
     commit_widget.render(chunks[1], frame.buffer_mut());
 
+    let status_text = if !app.status_message.is_empty() {
+        format!(">> {}", app.status_message)
+    } else {
+        String::new()
+    };
+    let status_widget = Paragraph::new(status_text)
+        .style(Style::default().fg(Color::Yellow))
+        .alignment(Alignment::Left);
+    status_widget.render(chunks[2], frame.buffer_mut());
+
     let help_text = format!(
-        "Enter: View Details | D: View Diff | ?: Help | t: Theme | q: Quit | Theme: {}",
+        "Enter: Details | c: Checkout | b: New Branch | D: Diff | ?: Help | t: Theme | q: Quit | Theme: {}",
         app.theme.name()
     );
     let help_widget = Paragraph::new(help_text)
         .style(Style::default().fg(app.theme.help))
         .alignment(Alignment::Center);
-    help_widget.render(chunks[2], frame.buffer_mut());
+    help_widget.render(chunks[3], frame.buffer_mut());
 }
 
 fn render_details_view(app: &App, frame: &mut ratatui::Frame) {
@@ -275,6 +347,7 @@ fn render_details_view(app: &App, frame: &mut ratatui::Frame) {
         .constraints([
             Constraint::Length(2),
             Constraint::Min(10),
+            Constraint::Length(1),
             Constraint::Length(2),
         ])
         .split(frame.size());
@@ -298,14 +371,24 @@ fn render_details_view(app: &App, frame: &mut ratatui::Frame) {
         details_widget.render(chunks[1], frame.buffer_mut());
     }
 
+    let status_text = if !app.status_message.is_empty() {
+        format!(">> {}", app.status_message)
+    } else {
+        String::new()
+    };
+    let status_widget = Paragraph::new(status_text)
+        .style(Style::default().fg(Color::Yellow))
+        .alignment(Alignment::Left);
+    status_widget.render(chunks[2], frame.buffer_mut());
+
     let help_text = format!(
-        "D: View Diff | j/k: Navigate | q/Esc: Back | Theme: {}",
+        "c: Checkout | b: New Branch | D: Diff | j/k: Navigate | q/Esc: Back | Theme: {}",
         app.theme.name()
     );
     let help_widget = Paragraph::new(help_text)
         .style(Style::default().fg(app.theme.help))
         .alignment(Alignment::Center);
-    help_widget.render(chunks[2], frame.buffer_mut());
+    help_widget.render(chunks[3], frame.buffer_mut());
 }
 
 fn render_diff_view(app: &App, frame: &mut ratatui::Frame) {
@@ -347,6 +430,49 @@ fn render_diff_view(app: &App, frame: &mut ratatui::Frame) {
     help_widget.render(chunks[2], frame.buffer_mut());
 }
 
+fn render_input_view(app: &App, frame: &mut ratatui::Frame) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Length(5),
+            Constraint::Min(10),
+            Constraint::Length(2),
+        ])
+        .split(frame.size());
+
+    let title = Paragraph::new("Create Branch")
+        .style(Style::default().fg(app.theme.title).add_modifier(Modifier::BOLD))
+        .alignment(Alignment::Center);
+    title.render(chunks[0], frame.buffer_mut());
+
+    let input_prompt = Paragraph::new(format!(
+        "Creating branch from commit: {}\n\nBranch name: {}\n\nPress Enter to create, Esc to cancel",
+        app.selected_commit()
+            .map(|c| c.short_hash.clone())
+            .unwrap_or_else(|| "unknown".to_string()),
+        app.branch_input
+    ))
+    .style(Style::default().fg(app.theme.text))
+    .alignment(Alignment::Left);
+    input_prompt.render(chunks[1], frame.buffer_mut());
+
+    let cursor = if app.branch_input.is_empty() {
+        "_"
+    } else {
+        "|"
+    };
+    let input_display = Paragraph::new(format!("{} {}", app.branch_input, cursor))
+        .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD));
+    input_display.render(chunks[2], frame.buffer_mut());
+
+    let help_text = format!("Esc: Cancel | Enter: Create | Theme: {}", app.theme.name());
+    let help_widget = Paragraph::new(help_text)
+        .style(Style::default().fg(app.theme.help))
+        .alignment(Alignment::Center);
+    help_widget.render(chunks[3], frame.buffer_mut());
+}
+
 fn render_help_overlay(app: &App, frame: &mut ratatui::Frame) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -369,6 +495,8 @@ fn render_help_overlay(app: &App, frame: &mut ratatui::Frame) {
 
 Actions:
   Enter             View commit details
+  c                 Checkout selected commit
+  b                 Create branch from commit
   Shift+D           View diff
   t                 Toggle dark/light theme
 
@@ -469,6 +597,43 @@ mod tests {
 
         app.handle_key(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
         assert_eq!(app.view_mode, ViewMode::List);
+    }
+
+    #[test]
+    fn test_branch_input_mode() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string());
+
+        assert_eq!(app.view_mode, ViewMode::List);
+        assert!(app.branch_input.is_empty());
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE));
+        assert_eq!(app.view_mode, ViewMode::InputBranch);
+        assert!(app.status_message.contains("branch name"));
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE));
+        assert_eq!(app.branch_input, "f");
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
+        assert_eq!(app.branch_input, "fe");
+
+        app.handle_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+        assert_eq!(app.branch_input, "f");
+
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.view_mode, ViewMode::List);
+        assert!(app.status_message.contains("Created branch"));
+    }
+
+    #[test]
+    fn test_checkout_key() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string());
+
+        assert!(app.status_message.is_empty());
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
+        assert!(app.status_message.contains("Checking out"));
     }
 
     #[test]
