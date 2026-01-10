@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     pub general: GeneralConfig,
     pub tui: TuiConfig,
@@ -23,20 +23,10 @@ pub struct TuiConfig {
     pub show_help_on_start: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GitConfig {
     pub auto_fetch: bool,
     pub fetch_remotes: bool,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Config {
-            general: GeneralConfig::default(),
-            tui: TuiConfig::default(),
-            git: GitConfig::default(),
-        }
-    }
 }
 
 impl Default for GeneralConfig {
@@ -55,15 +45,6 @@ impl Default for TuiConfig {
             theme: "dark".to_string(),
             page_size: 20,
             show_help_on_start: false,
-        }
-    }
-}
-
-impl Default for GitConfig {
-    fn default() -> Self {
-        GitConfig {
-            auto_fetch: false,
-            fetch_remotes: false,
         }
     }
 }

@@ -254,7 +254,7 @@ fn cmd_config(show: bool, reset: bool, theme: Option<&str>, max_commits: Option<
         println!("Max commits set to: {}", n);
     }
 
-    if show || (!theme.is_some() && max_commits.is_none()) {
+    if show || (theme.is_none() && max_commits.is_none()) {
         println!("Current Configuration:");
         println!("  Theme: {}", config.tui.theme);
         println!("  Max Commits: {}", config.general.max_commits);

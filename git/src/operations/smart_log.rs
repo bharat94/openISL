@@ -8,7 +8,6 @@ pub struct SmartLogFormatter {
 #[derive(Debug, Clone)]
 struct GraphNode {
     commit: Commit,
-    position: usize,
     is_main_branch: bool,
     has_children: bool,
 }
@@ -38,7 +37,7 @@ impl SmartLogFormatter {
     fn build_graph(&self) -> Vec<GraphNode> {
         let main_branch = self.find_main_branch();
 
-        self.commits.iter().enumerate().map(|(i, commit)| {
+        self.commits.iter().map(|commit| {
             let is_main = commit.refs.iter().any(|r| {
                 r.name == main_branch || r.name == "main" || r.name == "master"
             });
@@ -48,7 +47,6 @@ impl SmartLogFormatter {
 
             GraphNode {
                 commit: commit.clone(),
-                position: i,
                 is_main_branch: is_main,
                 has_children,
             }

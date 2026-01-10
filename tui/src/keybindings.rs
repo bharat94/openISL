@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 use crossterm::event::KeyCode;
-use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct KeyBindings {
     pub navigation: NavigationBindings,
     pub actions: ActionBindings,
@@ -36,16 +35,6 @@ pub struct ActionBindings {
 pub struct ViewBindings {
     pub next_view: String,
     pub prev_view: String,
-}
-
-impl Default for KeyBindings {
-    fn default() -> Self {
-        KeyBindings {
-            navigation: NavigationBindings::default(),
-            actions: ActionBindings::default(),
-            views: ViewBindings::default(),
-        }
-    }
 }
 
 impl Default for NavigationBindings {

@@ -15,7 +15,7 @@ pub fn tag_list(repo_path: &Path) -> Result<Vec<Tag>> {
         }
 
         let parts: Vec<&str> = line.splitn(5, '|').collect();
-        if parts.len() >= 1 {
+        if !parts.is_empty() {
             tags.push(Tag {
                 name: parts[0].to_string(),
                 tagger: if parts.len() > 1 { parts[1].to_string() } else { String::new() },

@@ -53,9 +53,7 @@ impl CommitTree {
         let mut root_commits: Vec<&Commit> = Vec::new();
 
         for commit in &commits {
-            if commit.parent_hashes.is_empty() {
-                root_commits.push(commit);
-            } else if !parent_map.contains_key(&commit.hash) {
+            if commit.parent_hashes.is_empty() || !parent_map.contains_key(&commit.hash) {
                 root_commits.push(commit);
             }
         }
@@ -64,7 +62,7 @@ impl CommitTree {
             self.build_branch(root, &commit_map, &parent_map, &mut processed, &mut Vec::new(), 0);
         }
 
-        self.nodes.sort_by_key(|n| n.commit.date.clone());
+        self.nodes.sort_by_key(|n| n.commit.date);
         self.nodes.reverse();
     }
 
@@ -74,7 +72,7 @@ impl CommitTree {
         commit_map: &HashMap<String, &'a Commit>,
         parent_map: &HashMap<String, Vec<String>>,
         processed: &mut HashSet<String>,
-        lanes: &mut Vec<bool>,
+        lanes: &mut [bool],
         depth: usize,
     ) {
         if processed.contains(&commit.hash) {
@@ -84,7 +82,7 @@ impl CommitTree {
 
         let is_main = commit.refs.iter().any(|r| r.ref_type == openisl_git::RefType::Head);
 
-        let children_hashes = parent_map.get(&commit.hash).map(|v| v.clone()).unwrap_or_default();
+        let children_hashes = parent_map.get(&commit.hash).cloned().unwrap_or_default();
         let is_merge = children_hashes.len() > 1 || commit.parent_hashes.len() > 1;
 
         let mut branch_lanes: Vec<BranchLane> = lanes.iter().map(|&is_continuing| {
@@ -113,7 +111,7 @@ impl CommitTree {
         if !children_hashes.is_empty() {
             for (i, child_hash) in children_hashes.iter().enumerate() {
                 if let Some(child_commit) = commit_map.get(child_hash) {
-                    let mut new_lanes = lanes.clone();
+                    let mut new_lanes = lanes.to_owned();
                     if i == children_hashes.len() - 1 {
                         if !new_lanes.is_empty() {
                             new_lanes.pop();
@@ -159,19 +157,15 @@ pub fn format_tree_node(node: &TreeNode, is_last: bool, _selected: bool) -> Stri
         }
     }
 
-    if node.branch_lanes.is_empty() {
-        if is_last {
+        if node.branch_lanes.is_empty() && is_last {
+            line.push('└');
+        } else if node.branch_lanes.is_empty() {
+            line.push('├');
+        } else if is_last {
             line.push('└');
         } else {
             line.push('├');
         }
-    } else {
-        if is_last {
-            line.push('└');
-        } else {
-            line.push('├');
-        }
-    }
 
     if node.is_main_branch {
         line.push('●');
@@ -202,7 +196,7 @@ pub fn format_tree_node(node: &TreeNode, is_last: bool, _selected: bool) -> Stri
         .filter(|n| !n.is_empty())
         .collect();
 
-    let mut content = format!("{}", hash_part);
+    let mut content = hash_part.to_string();
     if !branch_names.is_empty() {
         content.push_str(&format!(" [{}]", branch_names.join(", ")));
     }
