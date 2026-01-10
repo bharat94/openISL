@@ -187,11 +187,12 @@ See [Open Source Standards](OPEN_SOURCE_STANDARDS.md) for complete details.
 - [x] Diff viewer with actual diff content
 - **Released**: 2026-01-10
 
-### v0.4.0 (In Progress)
+### v0.4.0 (Released!)
 - [x] Configuration file support (config.toml in ~/.config/openisl/)
 - [x] Branch filtering options (--remote, --all flags)
 - [x] Enhanced graph visualization (●○│ characters, main branch marker)
-- [ ] Keyboard customization
+- [x] Keyboard customization (keybindings.toml)
+- **Released**: 2026-01-10
 
 ## License
 
