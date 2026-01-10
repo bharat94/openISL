@@ -161,7 +161,7 @@ See [Open Source Standards](OPEN_SOURCE_STANDARDS.md) for complete details.
 
 ## Roadmap
 
-### v0.1.0 (Current - Released!)
+### v0.1.0 (Released!)
 - [x] Workspace structure setup
 - [x] Git abstraction layer (CLI wrapper)
 - [x] Core CLI commands (log, branch, checkout, status, diff)
@@ -169,9 +169,10 @@ See [Open Source Standards](OPEN_SOURCE_STANDARDS.md) for complete details.
 - [x] Unit tests and documentation
 - **Released**: 2026-01-10
 
-### v0.2.0 (Planned)
-- [ ] Interactive TUI with commit tree
-- [ ] Keyboard navigation
+### v0.2.0 (Current - In Progress)
+- [x] Interactive TUI with commit tree
+- [x] Keyboard navigation
+- [x] TUI documentation
 - [ ] Dark theme preset
 - [ ] Performance optimizations
 
