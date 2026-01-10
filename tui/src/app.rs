@@ -257,6 +257,7 @@ impl App {
         match key.code {
             KeyCode::Esc => {
                 self.view_mode = ViewMode::List;
+                self.branch_input.clear();
                 self.status_message.clear();
                 return false;
             }
@@ -269,9 +270,9 @@ impl App {
                             commit.short_hash
                         );
                     }
-                    self.branch_input.clear();
-                    self.view_mode = ViewMode::List;
                 }
+                self.branch_input.clear();
+                self.view_mode = ViewMode::List;
                 return false;
             }
             KeyCode::Backspace => {
@@ -803,6 +804,7 @@ Customize: Edit ~/.config/openisl/keybindings.toml"#,
 mod tests {
     use super::*;
     use ratatui::style::Color;
+    use crate::tree::CommitTree;
 
     fn create_test_commits() -> Vec<Commit> {
         vec![
@@ -828,6 +830,17 @@ mod tests {
                 parent_hashes: vec!["abc123def456789".to_string()],
                 refs: vec![],
             },
+            Commit {
+                hash: "ghi789jkl012345".to_string(),
+                short_hash: "ghi789j".to_string(),
+                message: "Third commit".to_string(),
+                summary: "Third commit".to_string(),
+                author: "other@example.com".to_string(),
+                email: "other@example.com".to_string(),
+                date: chrono::Utc::now(),
+                parent_hashes: vec!["def456ghi789abc".to_string()],
+                refs: vec![],
+            },
         ]
     }
 
@@ -839,6 +852,8 @@ mod tests {
         assert_eq!(app.selected_index, 0);
         app.move_down();
         assert_eq!(app.selected_index, 1);
+        app.move_down();
+        assert_eq!(app.selected_index, 2);
     }
 
     #[test]
@@ -846,9 +861,63 @@ mod tests {
         let commits = create_test_commits();
         let mut app = App::new(commits, "main".to_string(), None);
 
-        app.selected_index = 1;
+        app.selected_index = 2;
+        app.move_up();
+        assert_eq!(app.selected_index, 1);
         app.move_up();
         assert_eq!(app.selected_index, 0);
+    }
+
+    #[test]
+    fn test_app_navigation_boundaries() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.move_up();
+        assert_eq!(app.selected_index, 0);
+
+        app.selected_index = 2;
+        app.move_down();
+        assert_eq!(app.selected_index, 2);
+    }
+
+    #[test]
+    fn test_app_navigation_page_down() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits.clone(), "main".to_string(), None);
+
+        app.selected_index = 0;
+        app.page_down();
+        assert!(app.selected_index >= 1);
+    }
+
+    #[test]
+    fn test_app_navigation_page_up() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits.clone(), "main".to_string(), None);
+
+        app.selected_index = 2;
+        app.page_up();
+        assert!(app.selected_index <= 2);
+    }
+
+    #[test]
+    fn test_app_go_to_start() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits.clone(), "main".to_string(), None);
+
+        app.selected_index = 2;
+        app.go_to_start();
+        assert_eq!(app.selected_index, 0);
+    }
+
+    #[test]
+    fn test_app_go_to_end() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits.clone(), "main".to_string(), None);
+
+        app.go_to_end();
+        assert_eq!(app.selected_index, commits.len() - 1);
     }
 
     #[test]
@@ -898,11 +967,68 @@ mod tests {
     }
 
     #[test]
+    fn test_branch_input_special_chars() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE));
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('-'), KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('_'), KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+
+        assert_eq!(app.branch_input, "f-_/");
+    }
+
+    #[test]
+    fn test_branch_input_rejects_invalid_chars() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE));
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('!'), KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('@'), KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
+
+        assert!(app.branch_input.is_empty());
+    }
+
+    #[test]
+    fn test_branch_input_cancel() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE));
+
+        assert_eq!(app.branch_input, "f");
+
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+        assert_eq!(app.view_mode, ViewMode::List);
+        assert!(app.branch_input.is_empty());
+    }
+
+    #[test]
     fn test_checkout_key() {
         let commits = create_test_commits();
         let mut app = App::new(commits, "main".to_string(), None);
 
         assert!(app.status_message.is_empty());
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
+        assert!(app.status_message.contains("Would checkout"));
+    }
+
+    #[test]
+    fn test_checkout_from_details_view() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.view_mode, ViewMode::Details);
 
         app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
         assert!(app.status_message.contains("Would checkout"));
@@ -926,6 +1052,9 @@ mod tests {
         assert_eq!(theme.name, "dark");
         assert_eq!(theme.title, Color::Cyan);
         assert_eq!(theme.text, Color::Gray);
+        assert_eq!(theme.border, Color::White);
+        assert_eq!(theme.selected, Color::White);
+        assert_eq!(theme.selected_bg, Color::DarkGray);
     }
 
     #[test]
@@ -934,6 +1063,9 @@ mod tests {
         assert_eq!(theme.name, "light");
         assert_eq!(theme.title, Color::Blue);
         assert_eq!(theme.text, Color::DarkGray);
+        assert_eq!(theme.border, Color::Black);
+        assert_eq!(theme.selected, Color::Black);
+        assert_eq!(theme.selected_bg, Color::Gray);
     }
 
     #[test]
@@ -942,7 +1074,18 @@ mod tests {
         let app = App::new(commits, "main".to_string(), None);
 
         let visible = app.visible_commits();
+        assert_eq!(visible.len(), 3);
+    }
+
+    #[test]
+    fn test_visible_commits_with_scroll() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits.clone(), "main".to_string(), None);
+
+        app.scroll_offset = 1;
+        let visible = app.visible_commits();
         assert_eq!(visible.len(), 2);
+        assert_eq!(visible[0].short_hash, "def456g");
     }
 
     #[test]
@@ -954,6 +1097,17 @@ mod tests {
 
         app.move_down();
         assert_eq!(app.selected_commit().unwrap().short_hash, "def456g");
+
+        app.move_down();
+        assert_eq!(app.selected_commit().unwrap().short_hash, "ghi789j");
+    }
+
+    #[test]
+    fn test_selected_commit_bounds() {
+        let commits = create_test_commits();
+        let app = App::new(commits, "main".to_string(), None);
+
+        assert!(app.selected_commit().is_some());
     }
 
     #[test]
@@ -970,6 +1124,17 @@ mod tests {
     }
 
     #[test]
+    fn test_format_commit_details_with_parents() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.move_down();
+        let commit = app.selected_commit().unwrap();
+        let details = app.format_commit_details(commit);
+        assert!(details.contains("abc123def456789"));
+    }
+
+    #[test]
     fn test_quit_from_list() {
         let commits = create_test_commits();
         let mut app = App::new(commits, "main".to_string(), None);
@@ -977,6 +1142,18 @@ mod tests {
         let quit_event = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE);
         let should_quit = app.handle_key(quit_event);
         assert!(should_quit);
+    }
+
+    #[test]
+    fn test_quit_from_details() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.view_mode = ViewMode::Details;
+        let quit_event = KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE);
+        let should_quit = app.handle_key(quit_event);
+        assert!(!should_quit);
+        assert_eq!(app.view_mode, ViewMode::List);
     }
 
     #[test]
@@ -1010,6 +1187,16 @@ mod tests {
     }
 
     #[test]
+    fn test_diff_view_exit() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.view_mode = ViewMode::Diff;
+        app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE));
+        assert_eq!(app.view_mode, ViewMode::List);
+    }
+
+    #[test]
     fn test_search_toggle() {
         let commits = create_test_commits();
         let mut app = App::new(commits, "main".to_string(), None);
@@ -1034,6 +1221,67 @@ mod tests {
     }
 
     #[test]
+    fn test_search_case_insensitive() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.search_query = "FIRST".to_string();
+        app.search();
+
+        assert_eq!(app.search_results.len(), 1);
+        assert_eq!(app.search_results[0], 0);
+    }
+
+    #[test]
+    fn test_search_by_author() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.search_query = "other@example.com".to_string();
+        app.search();
+
+        assert_eq!(app.search_results.len(), 1);
+        assert_eq!(app.search_results[0], 2);
+    }
+
+    #[test]
+    fn test_search_by_hash() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.search_query = "abc123d".to_string();
+        app.search();
+
+        assert_eq!(app.search_results.len(), 1);
+        assert_eq!(app.search_results[0], 0);
+    }
+
+    #[test]
+    fn test_search_no_results() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.search_query = "nonexistent".to_string();
+        app.search();
+
+        assert!(app.search_results.is_empty());
+    }
+
+    #[test]
+    fn test_search_empty_query() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.search_query = "commit".to_string();
+        app.search();
+        assert!(!app.search_results.is_empty());
+
+        app.search_query = "".to_string();
+        app.search();
+        assert!(app.search_results.is_empty());
+    }
+
+    #[test]
     fn test_search_navigation() {
         let commits = create_test_commits();
         let mut app = App::new(commits, "main".to_string(), None);
@@ -1041,13 +1289,30 @@ mod tests {
         app.search_query = "commit".to_string();
         app.search();
 
-        assert_eq!(app.search_results.len(), 2);
+        assert_eq!(app.search_results.len(), 3);
 
         app.next_search_result();
         assert_eq!(app.selected_index, app.search_results[1]);
 
         app.prev_search_result();
         assert_eq!(app.selected_index, app.search_results[0]);
+    }
+
+    #[test]
+    fn test_search_navigation_bounds() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.search_query = "commit".to_string();
+        app.search();
+
+        app.selected_index = app.search_results[0];
+        app.prev_search_result();
+        assert_eq!(app.selected_index, app.search_results[0]);
+
+        app.selected_index = app.search_results[app.search_results.len() - 1];
+        app.next_search_result();
+        assert_eq!(app.selected_index, app.search_results[app.search_results.len() - 1]);
     }
 
     #[test]
@@ -1063,5 +1328,135 @@ mod tests {
         assert!(app.search_query.is_empty());
         assert!(app.search_results.is_empty());
         assert!(!app.is_searching);
+    }
+
+    #[test]
+    fn test_search_escape() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        assert!(app.is_searching);
+
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(!app.is_searching);
+    }
+
+    #[test]
+    fn test_ctrl_navigation() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.search_query = "commit".to_string();
+        app.search();
+
+        let initial_index = app.selected_index;
+        app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::CONTROL));
+        assert_ne!(app.selected_index, initial_index);
+    }
+
+    #[test]
+    fn test_ctrl_p_navigation() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.search_query = "commit".to_string();
+        app.search();
+        app.next_search_result();
+
+        let initial_index = app.selected_index;
+        app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL));
+        assert_ne!(app.selected_index, initial_index);
+    }
+
+    #[test]
+    fn test_set_commits_updates_tree() {
+        let commits = create_test_commits();
+        let mut app = App::new(vec![], "main".to_string(), None);
+
+        app.set_commits(commits.clone());
+        assert_eq!(app.commits.len(), 3);
+        assert_eq!(app.tree.nodes().len(), 3);
+        assert_eq!(app.selected_index, 0);
+    }
+
+    #[test]
+    fn test_set_commits_resets_selection() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits.clone(), "main".to_string(), None);
+
+        app.selected_index = 2;
+        app.scroll_offset = 1;
+
+        app.set_commits(commits);
+        assert_eq!(app.selected_index, 0);
+        assert_eq!(app.scroll_offset, 0);
+    }
+
+    #[test]
+    fn test_key_event_returns_false_for_regular_keys() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        let result = app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_status_message_update() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.status_message = "Test message".to_string();
+        assert!(app.status_message.contains("Test"));
+    }
+
+    #[test]
+    fn test_branch_input_empty_submit() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.view_mode, ViewMode::List);
+    }
+
+    #[test]
+    fn test_shift_d_from_details() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert_eq!(app.view_mode, ViewMode::Details);
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::SHIFT));
+        assert_eq!(app.view_mode, ViewMode::Diff);
+    }
+
+    #[test]
+    fn test_view_mode_enum_values() {
+        assert_eq!(ViewMode::List as u8, 0);
+        assert_eq!(ViewMode::Details as u8, 1);
+        assert_eq!(ViewMode::Diff as u8, 2);
+        assert_eq!(ViewMode::Help as u8, 3);
+        assert_eq!(ViewMode::InputBranch as u8, 4);
+        assert_eq!(ViewMode::Search as u8, 5);
+    }
+
+    #[test]
+    fn test_commit_display_impl() {
+        let commit = &create_test_commits()[0];
+        let display = format!("{}", commit);
+        assert!(display.contains("abc123d"));
+        assert!(display.contains("First commit"));
+    }
+
+    #[test]
+    fn test_app_new_with_repo_path() {
+        let commits = create_test_commits();
+        let repo_path = Some(std::path::PathBuf::from("/test/repo"));
+        let app = App::new(commits, "main".to_string(), repo_path);
+
+        assert_eq!(app.repo_path, Some(std::path::PathBuf::from("/test/repo")));
     }
 }

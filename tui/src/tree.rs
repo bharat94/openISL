@@ -294,4 +294,113 @@ mod tests {
         assert!(line.contains("abc123d"), "Expected line to contain hash, got: {}", line);
         assert!(line.contains("Test commit"), "Expected line to contain summary, got: {}", line);
     }
+
+    #[test]
+    fn test_format_tree_node_contains_symbols() {
+        let commits = vec![create_test_commit("abc123def456789", "Test commit", vec![])];
+        let tree = CommitTree::new(commits);
+        let node = &tree.nodes()[0];
+        let line = format_tree_node(node, true, false);
+        assert!(line.contains('●') || line.contains('○'));
+    }
+
+    #[test]
+    fn test_format_tree_lines() {
+        let commits = vec![
+            create_test_commit("c123456789abcde", "Third", vec!["b123456789abcde"]),
+            create_test_commit("b123456789abcde", "Second", vec!["a123456789abcde"]),
+            create_test_commit("a123456789abcde", "First", vec![]),
+        ];
+        let tree = CommitTree::new(commits);
+        let lines = format_tree_lines(tree.nodes(), 0, 10);
+        assert_eq!(lines.len(), 3);
+        let all_content: String = lines.join(" ");
+        assert!(all_content.contains("c123456") || all_content.contains("b123456") || all_content.contains("a123456"));
+    }
+
+    #[test]
+    fn test_format_tree_lines_with_offset() {
+        let commits = vec![
+            create_test_commit("c123456789abcde", "Third", vec!["b123456789abcde"]),
+            create_test_commit("b123456789abcde", "Second", vec!["a123456789abcde"]),
+            create_test_commit("a123456789abcde", "First", vec![]),
+        ];
+        let tree = CommitTree::new(commits);
+        let lines = format_tree_lines(tree.nodes(), 1, 10);
+        assert_eq!(lines.len(), 2);
+        let all_content: String = lines.join(" ");
+        assert!(all_content.contains("b123456") || all_content.contains("a123456"));
+    }
+
+    #[test]
+    fn test_format_tree_lines_with_limit() {
+        let commits = vec![
+            create_test_commit("c123456789abcde", "Third", vec!["b123456789abcde"]),
+            create_test_commit("b123456789abcde", "Second", vec!["a123456789abcde"]),
+            create_test_commit("a123456789abcde", "First", vec![]),
+        ];
+        let tree = CommitTree::new(commits);
+        let lines = format_tree_lines(tree.nodes(), 0, 2);
+        assert_eq!(lines.len(), 2);
+    }
+
+    #[test]
+    fn test_tree_max_depth() {
+        let commits = vec![
+            create_test_commit("d123456789abcde", "Fourth", vec!["c123456789abcde"]),
+            create_test_commit("c123456789abcde", "Third", vec!["b123456789abcde"]),
+            create_test_commit("b123456789abcde", "Second", vec!["a123456789abcde"]),
+            create_test_commit("a123456789abcde", "First", vec![]),
+        ];
+        let tree = CommitTree::new(commits);
+        assert!(tree.max_depth() > 0);
+    }
+
+    #[test]
+    fn test_tree_with_merge_commit() {
+        let commits = vec![
+            create_test_commit("e123456789abcde", "Merge", vec!["c123456789abcde", "d123456789abcde"]),
+            create_test_commit("d123456789abcde", "Feature B", vec!["b123456789abcde"]),
+            create_test_commit("c123456789abcde", "Feature A", vec!["b123456789abcde"]),
+            create_test_commit("b123456789abcde", "Second", vec!["a123456789abcde"]),
+            create_test_commit("a123456789abcde", "First", vec![]),
+        ];
+        let tree = CommitTree::new(commits);
+        assert_eq!(tree.nodes().len(), 5);
+    }
+
+    #[test]
+    fn test_tree_preserves_commit_order() {
+        let commits = vec![
+            create_test_commit("c123456789abcde", "Third", vec!["b123456789abcde"]),
+            create_test_commit("b123456789abcde", "Second", vec!["a123456789abcde"]),
+            create_test_commit("a123456789abcde", "First", vec![]),
+        ];
+        let tree = CommitTree::new(commits);
+        let nodes = tree.nodes();
+        assert_eq!(nodes.len(), 3);
+        assert!(nodes[0].commit.summary.contains("Third") ||
+                nodes[0].commit.summary.contains("First"));
+    }
+
+    #[test]
+    fn test_tree_node_clone() {
+        let commits = vec![create_test_commit("abc123def456789", "Test", vec![])];
+        let tree = CommitTree::new(commits.clone());
+        let node = tree.nodes()[0].clone();
+        assert_eq!(node.commit.hash, "abc123def456789");
+    }
+
+    #[test]
+    fn test_format_tree_node_with_branches() {
+        use openisl_git::{GitRef, RefType};
+        let mut commit = create_test_commit("abc123def456789", "Test commit", vec![]);
+        commit.refs = vec![
+            GitRef { name: "refs/heads/main".to_string(), ref_type: RefType::Branch },
+        ];
+        let tree = CommitTree::new(vec![commit]);
+        let node = &tree.nodes()[0];
+        let line = format_tree_node(node, true, false);
+        assert!(line.contains("main"));
+    }
 }

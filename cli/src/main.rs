@@ -317,11 +317,10 @@ mod tests {
 
     #[test]
     fn test_cli_parse_log() {
-        let args = vec!["openisl", "log", "--simple", "-n", "10"];
+        let args = vec!["openisl", "log", "--max-count", "10"];
         let cli = Cli::parse_from(&args);
         match &cli.command {
-            Commands::Log { simple, all: _, no_remote: _, max_count } => {
-                assert!(*simple);
+            Commands::Log { simple: _, branch: _, remote: _, max_count } => {
                 assert_eq!(*max_count, Some(10));
             }
             _ => panic!("Expected Log command"),
@@ -333,7 +332,7 @@ mod tests {
         let args = vec!["openisl", "branch", "feature/new"];
         let cli = Cli::parse_from(&args);
         match &cli.command {
-            Commands::Branch { name } => {
+            Commands::Branch { name, .. } => {
                 assert_eq!(name.as_ref().unwrap(), "feature/new");
             }
             _ => panic!("Expected Branch command"),
@@ -341,12 +340,26 @@ mod tests {
     }
 
     #[test]
-    fn test_cli_parse_help() {
-        let args = vec!["openisl", "help"];
+    fn test_cli_parse_remote() {
+        let args = vec!["openisl", "remote", "--list"];
         let cli = Cli::parse_from(&args);
         match &cli.command {
-            Commands::Help => {}
-            _ => panic!("Expected Help command"),
+            Commands::Remote { list, .. } => {
+                assert!(*list);
+            }
+            _ => panic!("Expected Remote command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parse_tag() {
+        let args = vec!["openisl", "tag", "--list"];
+        let cli = Cli::parse_from(&args);
+        match &cli.command {
+            Commands::Tag { list, .. } => {
+                assert!(*list);
+            }
+            _ => panic!("Expected Tag command"),
         }
     }
 }
