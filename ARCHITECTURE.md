@@ -176,6 +176,47 @@ UI/CLI Display
 4. User config (~/.config/openisl/config.toml)
 5. Default values (lowest precedence)
 
+### Data Models
+
+openISL uses several core data models for representing git data:
+
+#### Commit
+Represents a single git commit with full metadata:
+```
+Commit {
+    hash: String,           // Full SHA-1 hash
+    short_hash: String,     // 7-character abbreviated hash
+    message: String,        // Full commit message
+    summary: String,        // First line of message
+    author: String,         // Author name
+    email: String,          // Author email
+    date: DateTime<Utc>,    // Commit timestamp
+    parent_hashes: Vec<String>,  // Parent commit hashes
+    refs: Vec<GitRef>,      // Associated refs (branches, tags)
+}
+```
+
+#### GitRef
+Represents a git reference (branch, tag, HEAD):
+```
+GitRef {
+    name: String,      // Ref name (e.g., "main", "v1.0.0")
+    ref_type: RefType, // Branch, Tag, Remote, or Head
+}
+```
+
+#### RefType Enum
+```
+enum RefType {
+    Head,      // HEAD pointer
+    Branch,    // Local branch
+    Tag,       // Tag reference
+    Remote,    // Remote branch
+}
+```
+
+All models implement `Serialize` and `Deserialize` for potential export and `Display` for debugging.
+
 ## Cross-Cutting Concerns
 
 ### Error Handling
