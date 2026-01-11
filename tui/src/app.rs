@@ -15,7 +15,7 @@ use openisl_git::{Commit, get_commit_diff};
 use crate::theme::Theme;
 use crate::keybindings::KeyBindings;
 use crate::tree::{CommitTree, format_tree_lines};
-use crate::diff::{DiffParser, DiffLineType, DiffStats};
+use crate::diff::{DiffParser, DiffStats};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ViewMode {
@@ -25,10 +25,30 @@ pub enum ViewMode {
     Help,
     InputBranch,
     Search,
+    Filter,
+    Stats,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum FilterMode {
+    Author,
+    Message,
+    Date,
+}
+
+#[derive(Debug, Default)]
+pub struct RepoStats {
+    pub total_commits: usize,
+    pub total_authors: usize,
+    pub commits_by_author: Vec<(String, usize)>,
+    pub commits_today: usize,
+    pub commits_this_week: usize,
+    pub commits_this_month: usize,
 }
 
 pub struct App {
     pub commits: Vec<Commit>,
+    pub filtered_commits: Vec<Commit>,
     pub selected_index: usize,
     pub scroll_offset: usize,
     pub show_help: bool,
@@ -45,12 +65,18 @@ pub struct App {
     pub search_results: Vec<usize>,
     pub is_searching: bool,
     pub tree: CommitTree,
+    pub filter_mode: FilterMode,
+    pub filter_input: String,
+    pub is_filtering: bool,
+    pub show_stats: bool,
+    pub stats: RepoStats,
 }
 
 impl App {
     pub fn new(commits: Vec<Commit>, current_branch: String, repo_path: Option<std::path::PathBuf>) -> Self {
-        Self {
-            commits,
+        let mut app = Self {
+            commits: commits.clone(),
+            filtered_commits: commits.clone(),
             selected_index: 0,
             scroll_offset: 0,
             show_help: false,
@@ -66,15 +92,24 @@ impl App {
             search_query: String::new(),
             search_results: Vec::new(),
             is_searching: false,
-            tree: CommitTree::new(Vec::new()),
-        }
+            tree: CommitTree::new(commits.clone()),
+            filter_mode: FilterMode::Author,
+            filter_input: String::new(),
+            is_filtering: false,
+            show_stats: false,
+            stats: RepoStats::default(),
+        };
+        app.calculate_stats();
+        app
     }
 
     pub fn set_commits(&mut self, commits: Vec<Commit>) {
-        self.commits = commits;
-        self.tree = CommitTree::new(self.commits.clone());
+        self.commits = commits.clone();
+        self.filtered_commits = commits.clone();
+        self.tree = CommitTree::new(commits);
         self.selected_index = 0;
         self.scroll_offset = 0;
+        self.calculate_stats();
     }
 
     pub fn parse_diff(&mut self) {
@@ -86,6 +121,75 @@ impl App {
         self.diff_stats = DiffParser::count_stats(&lines);
     }
 
+    pub fn calculate_stats(&mut self) {
+        let now = chrono::Utc::now();
+        let one_day = chrono::Duration::days(1);
+        let one_week = chrono::Duration::days(7);
+        let one_month = chrono::Duration::days(30);
+
+        let mut author_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+
+        for commit in &self.commits {
+            *author_counts.entry(commit.author.clone()).or_insert(0) += 1;
+
+            if now.signed_duration_since(commit.date) <= one_day {
+                self.stats.commits_today += 1;
+            }
+            if now.signed_duration_since(commit.date) <= one_week {
+                self.stats.commits_this_week += 1;
+            }
+            if now.signed_duration_since(commit.date) <= one_month {
+                self.stats.commits_this_month += 1;
+            }
+        }
+
+        let mut commits_by_author: Vec<_> = author_counts.into_iter().collect();
+        commits_by_author.sort_by_key(|(_, count)| std::cmp::Reverse(*count));
+
+        self.stats.total_commits = self.commits.len();
+        self.stats.total_authors = commits_by_author.len();
+        self.stats.commits_by_author = commits_by_author;
+    }
+
+    pub fn apply_filter(&mut self) {
+        if self.filter_input.is_empty() {
+            self.filtered_commits = self.commits.clone();
+            self.is_filtering = false;
+            return;
+        }
+
+        self.is_filtering = true;
+        let query = self.filter_input.to_lowercase();
+
+        self.filtered_commits = self.commits.iter().filter(|commit| {
+            match self.filter_mode {
+                FilterMode::Author => commit.author.to_lowercase().contains(&query),
+                FilterMode::Message => commit.summary.to_lowercase().contains(&query)
+                    || commit.message.to_lowercase().contains(&query),
+                FilterMode::Date => commit.date.format("%Y-%m-%d").to_string().contains(&query),
+            }
+        }).cloned().collect();
+
+        self.selected_index = 0;
+        self.scroll_offset = 0;
+    }
+
+    pub fn clear_filter(&mut self) {
+        self.filter_input.clear();
+        self.filtered_commits = self.commits.clone();
+        self.is_filtering = false;
+    }
+
+    pub fn visible_commits(&self) -> &[Commit] {
+        let commits = if self.is_filtering { &self.filtered_commits } else { &self.commits };
+        let end = (self.scroll_offset + 20).min(commits.len());
+        &commits[self.scroll_offset..end]
+    }
+
+    pub fn selected_commit(&self) -> Option<&Commit> {
+        let commits = if self.is_filtering { &self.filtered_commits } else { &self.commits };
+        commits.get(self.selected_index)
+    }
     pub fn search(&mut self) {
         if self.search_query.is_empty() {
             self.search_results.clear();
@@ -165,6 +269,8 @@ impl App {
             ViewMode::Help => self.handle_help_key(key),
             ViewMode::InputBranch => self.handle_input_key(key),
             ViewMode::Search => self.handle_search_key(key),
+            ViewMode::Filter => self.handle_filter_key(key),
+            ViewMode::Stats => self.handle_stats_key(key),
         }
     }
 
@@ -186,6 +292,15 @@ impl App {
                 self.is_searching = true;
                 self.search_query.clear();
             }
+            KeyCode::Char('f') => {
+                self.filter_input.clear();
+                self.filter_mode = FilterMode::Author;
+                self.view_mode = ViewMode::Filter;
+                self.status_message = "Filter by author (a), message (m), or date (d) - Esc to cancel".to_string();
+            }
+            KeyCode::Char('s') => {
+                self.view_mode = ViewMode::Stats;
+            }
             KeyCode::Char('n') if key.modifiers.contains(KeyModifiers::CONTROL) => self.next_search_result(),
             KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => self.prev_search_result(),
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::SHIFT) => {
@@ -203,7 +318,60 @@ impl App {
                 self.status_message = "Enter branch name (or Esc to cancel):".to_string();
             }
             KeyCode::Char('?') => self.view_mode = ViewMode::Help,
+            KeyCode::Char('r') => {
+                self.apply_filter();
+                self.status_message = format!("Filter: {} commits", self.filtered_commits.len());
+            }
             KeyCode::Char('t') => self.theme.toggle(),
+            _ => {}
+        }
+        false
+    }
+
+    fn handle_filter_key(&mut self, key: KeyEvent) -> bool {
+        match key.code {
+            KeyCode::Esc => {
+                self.clear_filter();
+                self.view_mode = ViewMode::List;
+                self.status_message.clear();
+                return false;
+            }
+            KeyCode::Enter => {
+                self.apply_filter();
+                self.status_message = format!("Filter: {} commits", self.filtered_commits.len());
+                self.view_mode = ViewMode::List;
+                return false;
+            }
+            KeyCode::Backspace => {
+                self.filter_input.pop();
+            }
+            KeyCode::Char('a') => {
+                self.filter_mode = FilterMode::Author;
+                self.status_message = "Filtering by author...".to_string();
+            }
+            KeyCode::Char('m') => {
+                self.filter_mode = FilterMode::Message;
+                self.status_message = "Filtering by message...".to_string();
+            }
+            KeyCode::Char('d') => {
+                self.filter_mode = FilterMode::Date;
+                self.status_message = "Filtering by date (YYYY-MM-DD)...".to_string();
+            }
+            KeyCode::Char(c) => {
+                if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ' ' || c == '.' || c == '@' {
+                    self.filter_input.push(c);
+                }
+            }
+            _ => {}
+        }
+        false
+    }
+
+    fn handle_stats_key(&mut self, key: KeyEvent) -> bool {
+        match key.code {
+            KeyCode::Char('q') | KeyCode::Esc | KeyCode::Enter => {
+                self.view_mode = ViewMode::List;
+            }
             _ => {}
         }
         false
@@ -360,15 +528,6 @@ impl App {
         }
     }
 
-    pub fn visible_commits(&self) -> &[Commit] {
-        let end = (self.scroll_offset + 20).min(self.commits.len());
-        &self.commits[self.scroll_offset..end]
-    }
-
-    pub fn selected_commit(&self) -> Option<&Commit> {
-        self.commits.get(self.selected_index)
-    }
-
     pub fn format_commit_details(&self, commit: &Commit) -> String {
         format!(
             "Commit: {}\nShort:   {}\nAuthor:  {} <{}>\nDate:    {}\n\n{}\n\nParents: {}",
@@ -428,6 +587,8 @@ pub fn run_tui(commits: Vec<Commit>, current_branch: String, repo_path: Option<s
                 ViewMode::Help => render_help_overlay(&app, frame),
                 ViewMode::InputBranch => render_input_view(&app, frame),
                 ViewMode::Search => render_search_view(&app, frame),
+                ViewMode::Filter => render_filter_view(&app, frame),
+                ViewMode::Stats => render_stats_view(&app, frame),
             }
         })?;
 
@@ -828,6 +989,123 @@ Customize: Edit ~/.config/openisl/keybindings.toml"#,
     let help_text = format!(
         "Press {} to close | Theme: {}",
         app.keybindings.actions.help,
+        app.theme.name()
+    );
+    let help_widget = Paragraph::new(help_text)
+        .style(Style::default().fg(app.theme.help))
+        .alignment(Alignment::Center);
+    help_widget.render(chunks[2], frame.buffer_mut());
+}
+
+fn render_filter_view(app: &App, frame: &mut ratatui::Frame) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Length(5),
+            Constraint::Min(10),
+            Constraint::Length(2),
+        ])
+        .split(frame.size());
+
+    let title = Paragraph::new("Filter Commits")
+        .style(Style::default().fg(app.theme.title).add_modifier(Modifier::BOLD))
+        .alignment(Alignment::Center);
+    title.render(chunks[0], frame.buffer_mut());
+
+    let filter_info = match app.filter_mode {
+        FilterMode::Author => "Filter by author (press a/m/d to change filter type)",
+        FilterMode::Message => "Filter by message (press a/m/d to change filter type)",
+        FilterMode::Date => "Filter by date YYYY-MM-DD (press a/m/d to change filter type)",
+    };
+
+    let filter_prompt = Paragraph::new(format!(
+        "{}\n\nCurrent filter: {}\n\nFilter: {}\n\nPress Enter to apply, Esc to cancel",
+        filter_info,
+        if app.filter_input.is_empty() { "(none)" } else { &app.filter_input },
+        app.filter_input
+    ))
+    .style(Style::default().fg(app.theme.text))
+    .alignment(Alignment::Left);
+    filter_prompt.render(chunks[1], frame.buffer_mut());
+
+    let cursor = if app.filter_input.is_empty() { "_" } else { "|" };
+    let input_display = Paragraph::new(format!("{} {}", app.filter_input, cursor))
+        .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD));
+    input_display.render(chunks[2], frame.buffer_mut());
+
+    let help_text = format!(
+        "Enter: Apply | Esc: Cancel | a/m/d: Filter type | Theme: {}",
+        app.theme.name()
+    );
+    let help_widget = Paragraph::new(help_text)
+        .style(Style::default().fg(app.theme.help))
+        .alignment(Alignment::Center);
+    help_widget.render(chunks[3], frame.buffer_mut());
+}
+
+fn render_stats_view(app: &App, frame: &mut ratatui::Frame) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Min(10),
+            Constraint::Length(2),
+        ])
+        .split(frame.size());
+
+    let title = Paragraph::new("Repository Statistics")
+        .style(Style::default().fg(app.theme.title).add_modifier(Modifier::BOLD))
+        .alignment(Alignment::Center);
+    title.render(chunks[0], frame.buffer_mut());
+
+    let stats_content = format!(
+        r#"Repository: {}
+Current Branch: {}
+
+Commits:
+  Total: {}
+  Today: {}
+  This Week: {}
+  This Month: {}
+
+Authors:
+  Total: {}
+
+Top Contributors:
+"#,
+        app.repo_path.as_ref()
+            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+            .unwrap_or_else(|| "Unknown".to_string()),
+        app.current_branch,
+        app.stats.total_commits,
+        app.stats.commits_today,
+        app.stats.commits_this_week,
+        app.stats.commits_this_month,
+        app.stats.total_authors,
+    );
+
+    let mut top_contributors = String::new();
+    for (i, (author, count)) in app.stats.commits_by_author.iter().take(5).enumerate() {
+        top_contributors.push_str(&format!("  {}. {} ({})\n", i + 1, author, count));
+    }
+
+    let full_content = format!("{}{}", stats_content, top_contributors);
+
+    let stats_widget = Paragraph::new(full_content)
+        .style(Style::default().fg(app.theme.text))
+        .alignment(Alignment::Left)
+        .block(
+            Block::default()
+                .title("Statistics")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Plain)
+                .style(Style::default().fg(app.theme.border)),
+        );
+    stats_widget.render(chunks[1], frame.buffer_mut());
+
+    let help_text = format!(
+        "Press Enter, Esc, or q to close | Theme: {}",
         app.theme.name()
     );
     let help_widget = Paragraph::new(help_text)
