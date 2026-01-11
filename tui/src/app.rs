@@ -1381,11 +1381,9 @@ fn render_files_panel(app: &App) -> impl Widget {
                     .position(|f| f.path == file.path)
                     .unwrap_or(0);
             let style = if is_selected {
-                Style::default()
-                    .fg(app.theme.selected)
-                    .bg(app.theme.selected_bg)
+                Style::default().fg(Color::White).bg(app.theme.selected_bg)
             } else {
-                Style::default().fg(app.theme.text)
+                Style::default().fg(Color::White)
             };
             ListItem::new(content).style(style)
         })
@@ -1417,11 +1415,9 @@ fn render_branches_panel(app: &App) -> impl Widget {
                     .position(|b| b.name == branch.name)
                     .unwrap_or(0);
             let style = if is_selected {
-                Style::default()
-                    .fg(app.theme.selected)
-                    .bg(app.theme.selected_bg)
+                Style::default().fg(Color::White).bg(app.theme.selected_bg)
             } else {
-                Style::default().fg(app.theme.text)
+                Style::default().fg(Color::White)
             };
             ListItem::new(content).style(style)
         })
@@ -1454,12 +1450,12 @@ fn render_commits_panel(app: &App, area: Rect) -> impl Widget {
             if is_selected {
                 Line::from(line_clone).style(
                     Style::default()
-                        .fg(app.theme.selected)
+                        .fg(Color::White)
                         .add_modifier(Modifier::BOLD)
                         .bg(app.theme.selected_bg),
                 )
             } else {
-                Line::from(line_clone).style(Style::default().fg(app.theme.text))
+                Line::from(line_clone).style(Style::default().fg(Color::White))
             }
         })
         .collect();
@@ -1521,12 +1517,12 @@ fn render_main_content(app: &App, area: Rect, frame: &mut ratatui::Frame) {
             if is_selected {
                 Line::from(line_clone).style(
                     Style::default()
-                        .fg(app.theme.selected)
+                        .fg(Color::White)
                         .add_modifier(Modifier::BOLD)
                         .bg(app.theme.selected_bg),
                 )
             } else {
-                Line::from(line_clone).style(Style::default().fg(app.theme.text))
+                Line::from(line_clone).style(Style::default().fg(Color::White))
             }
         })
         .collect();
