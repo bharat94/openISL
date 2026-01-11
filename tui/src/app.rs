@@ -4,7 +4,11 @@ use crate::theme::Theme;
 use crate::tree::{format_tree_lines, CommitTree};
 use anyhow::Result;
 use crossterm::{
-    event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
+    event::{
+        self, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
+        MouseEventKind,
+    },
+    execute,
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 use openisl_git::{get_commit_diff, Commit, FileStatus, GitRef};
@@ -96,6 +100,9 @@ pub struct App {
     pub branch_scroll_offset: usize,
     pub command_palette_input: String,
     pub command_palette_results: Vec<CommandAction>,
+    pub mouse_scroll_offset: usize,
+    pub last_click_position: Option<(u16, u16)>,
+    pub last_click_time: Option<std::time::Instant>,
 }
 
 impl App {
@@ -138,6 +145,9 @@ impl App {
             branch_scroll_offset: 0,
             command_palette_input: String::new(),
             command_palette_results: Vec::new(),
+            mouse_scroll_offset: 0,
+            last_click_position: None,
+            last_click_time: None,
         };
         app.calculate_stats();
         app.populate_command_palette();
@@ -746,6 +756,113 @@ impl App {
         }
     }
 
+    pub fn handle_mouse(&mut self, event: MouseEvent) -> bool {
+        match event.kind {
+            MouseEventKind::Down(btn) if btn == MouseButton::Left => {
+                self.handle_left_click(event);
+            }
+            MouseEventKind::Down(btn) if btn == MouseButton::Right => {
+                self.handle_right_click();
+            }
+            MouseEventKind::ScrollDown => {
+                self.mouse_scroll_down();
+            }
+            MouseEventKind::ScrollUp => {
+                self.mouse_scroll_up();
+            }
+            _ => {}
+        }
+        false
+    }
+
+    fn handle_left_click(&mut self, event: MouseEvent) {
+        let now = std::time::Instant::now();
+        let is_double_click = match (self.last_click_position, self.last_click_time) {
+            (Some((x, y)), Some(time)) => {
+                let time_elapsed = now.duration_since(time);
+                x == event.column && y == event.row && time_elapsed.as_millis() < 300
+            }
+            _ => false,
+        };
+
+        self.last_click_position = Some((event.column, event.row));
+        self.last_click_time = Some(now);
+
+        if self.sidebar_visible {
+            self.handle_sidebar_click(event);
+        } else {
+            self.handle_main_area_click(event);
+        }
+
+        if is_double_click {
+            self.handle_double_click();
+        }
+    }
+
+    fn handle_right_click(&mut self) {
+        self.status_message = "Right click - use left click to select".to_string();
+    }
+
+    fn handle_sidebar_click(&mut self, event: MouseEvent) {
+        let sidebar_width = 30;
+
+        if event.column < sidebar_width {
+            let sidebar_y = event.row;
+
+            if sidebar_y < 3 {
+                self.active_panel = PanelType::Files;
+            } else if sidebar_y < 6 {
+                self.active_panel = PanelType::Branches;
+            } else {
+                self.active_panel = PanelType::Commits;
+            }
+        }
+    }
+
+    fn handle_main_area_click(&mut self, event: MouseEvent) {
+        let items_per_page = 15;
+        let header_height = 2;
+        let offset = self.scroll_offset;
+
+        if event.row >= header_height && event.row < header_height + items_per_page {
+            let clicked_index = offset + (event.row - header_height) as usize;
+            if clicked_index < self.commits.len() {
+                self.selected_index = clicked_index;
+            }
+        }
+    }
+
+    fn handle_double_click(&mut self) {
+        match self.view_mode {
+            ViewMode::List => {
+                self.view_mode = ViewMode::Details;
+                self.status_message = "Double-click: viewing details".to_string();
+            }
+            _ => {}
+        }
+    }
+
+    fn mouse_scroll_down(&mut self) {
+        let max_index = self.commits.len().saturating_sub(1);
+        let items_per_page = 15;
+
+        if self.selected_index < max_index {
+            self.selected_index += 1;
+            if self.selected_index >= self.scroll_offset + items_per_page {
+                self.scroll_offset = self.selected_index.saturating_sub(items_per_page - 1);
+            }
+        }
+    }
+
+    fn mouse_scroll_up(&mut self) {
+        if self.selected_index > 0 {
+            self.selected_index = self.selected_index.saturating_sub(1);
+            if self.selected_index < self.scroll_offset {
+                self.scroll_offset = self.selected_index.saturating_sub(1);
+            }
+        }
+    }
+
     fn handle_search_key(&mut self, key: KeyEvent) -> bool {
         match key.code {
             KeyCode::Esc => {
@@ -946,6 +1063,7 @@ pub fn run_tui(
     let mut stdout = stdout();
 
     enable_raw_mode()?;
+    execute!(stdout, EnableMouseCapture)?;
 
     let backend = CrosstermBackend::new(&mut stdout);
     let mut terminal = Terminal::new(backend)?;
@@ -968,11 +1086,18 @@ pub fn run_tui(
         })?;
 
         if event::poll(std::time::Duration::from_millis(50))? {
-            if let Event::Key(key) = event::read()? {
-                let should_quit = app.handle_key(key);
-                if should_quit {
-                    break;
+            match event::read()? {
+                Event::Key(key) => {
+                    let should_quit = app.handle_key(key);
+                    if should_quit {
+                        break;
+                    }
                 }
+                Event::Mouse(mouse_event) => {
+                    app.handle_mouse(mouse_event);
+                }
+                Event::Resize(_, _) => {}
+                Event::FocusGained | Event::FocusLost | Event::Paste(_) => {}
             }
         }
     }
@@ -2721,5 +2846,75 @@ mod tests {
         assert!(!app.sidebar_visible);
         app.execute_command("toggle_theme");
         assert_eq!(app.theme.name(), "light");
+    }
+
+    #[test]
+    fn test_mouse_scroll_down() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        assert_eq!(app.selected_index, 0);
+        app.mouse_scroll_down();
+        assert_eq!(app.selected_index, 1);
+    }
+
+    #[test]
+    fn test_mouse_scroll_up() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.selected_index = 2;
+        app.mouse_scroll_up();
+        assert_eq!(app.selected_index, 1);
+    }
+
+    #[test]
+    fn test_mouse_scroll_bounds() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.selected_index = 0;
+        app.mouse_scroll_up();
+        assert_eq!(app.selected_index, 0);
+
+        app.selected_index = 2;
+        app.mouse_scroll_down();
+        assert_eq!(app.selected_index, 2);
+    }
+
+    #[test]
+    fn test_mouse_click_sets_position() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        let mouse_event = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        };
+
+        app.handle_mouse(mouse_event);
+        assert_eq!(app.last_click_position, Some((10, 5)));
+        assert!(app.last_click_time.is_some());
+    }
+
+    #[test]
+    fn test_mouse_double_click_detection() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        let mouse_event = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        };
+
+        app.handle_mouse(mouse_event);
+        assert_eq!(app.view_mode, ViewMode::List);
+
+        app.handle_mouse(mouse_event);
+        assert_eq!(app.view_mode, ViewMode::Details);
     }
 }
