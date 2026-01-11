@@ -71,13 +71,12 @@ impl Config {
     }
 
     pub fn save(&self) -> Result<()> {
-        let config_path = get_config_path()
-            .unwrap_or_else(|| {
-                let mut path = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
-                path.push("openisl");
-                path.push("config.toml");
-                path
-            });
+        let config_path = get_config_path().unwrap_or_else(|| {
+            let mut path = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
+            path.push("openisl");
+            path.push("config.toml");
+            path
+        });
 
         std::fs::create_dir_all(config_path.parent().unwrap())
             .context("Failed to create config directory")?;

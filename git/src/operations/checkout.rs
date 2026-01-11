@@ -1,11 +1,10 @@
+use crate::command::run;
 use anyhow::{Context, Result};
 use std::path::Path;
-use crate::command::run;
 
 pub fn checkout(repo_path: &Path, target: &str) -> Result<()> {
     let args = vec!["checkout", target];
-    run(&args, Some(repo_path))
-        .with_context(|| format!("Failed to checkout '{}'", target))?;
+    run(&args, Some(repo_path)).with_context(|| format!("Failed to checkout '{}'", target))?;
     Ok(())
 }
 

@@ -1,7 +1,7 @@
+use crate::error::GitError;
 use anyhow::Result;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use crate::error::GitError;
 
 pub fn run(args: &[&str], cwd: Option<&Path>) -> Result<String> {
     let output = run_raw(args, cwd)?;

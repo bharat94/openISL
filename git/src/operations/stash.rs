@@ -1,12 +1,13 @@
+use crate::command::run;
 use anyhow::{Context, Result};
 use std::path::Path;
-use crate::command::run;
 
 pub fn get_stash_list(repo_path: &Path) -> Result<Vec<StashEntry>> {
     let output = run(
         &["stash", "list", "--format=%gd|%gs|%h|%an|%ae|%ci"],
-        Some(repo_path)
-    ).context("Failed to get stash list")?;
+        Some(repo_path),
+    )
+    .context("Failed to get stash list")?;
 
     let mut entries = Vec::new();
     for line in output.lines() {
@@ -76,10 +77,7 @@ pub fn stash_drop(repo_path: &Path, stash_index: Option<&str>) -> Result<()> {
 }
 
 pub fn stash_show(repo_path: &Path, stash_index: &str) -> Result<String> {
-    run(
-        &["stash", "show", "-p", stash_index],
-        Some(repo_path)
-    ).context("Failed to show stash diff")
+    run(&["stash", "show", "-p", stash_index], Some(repo_path)).context("Failed to show stash diff")
 }
 
 #[derive(Debug, Clone)]

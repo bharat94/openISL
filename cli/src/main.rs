@@ -1,6 +1,9 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use openisl_git::{get_commits, get_branches, get_current_branch, get_status, get_diff, StatusType, SmartLogFormatter, remote_list, tag_list, remote_remove, create_tag, delete_tag};
+use openisl_git::{
+    create_tag, delete_tag, get_branches, get_commits, get_current_branch, get_diff, get_status,
+    remote_list, remote_remove, tag_list, SmartLogFormatter, StatusType,
+};
 mod config;
 use config::Config;
 
@@ -97,7 +100,12 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::Log { simple, branch, remote, max_count } => {
+        Commands::Log {
+            simple,
+            branch,
+            remote,
+            max_count,
+        } => {
             cmd_log(*simple, branch.as_deref(), *remote, *max_count)?;
         }
         Commands::Tui => {
@@ -115,21 +123,41 @@ fn main() -> Result<()> {
         Commands::Diff { staged, commit } => {
             cmd_diff(*staged, commit.as_deref())?;
         }
-        Commands::Config { show, reset, theme, max_commits } => {
+        Commands::Config {
+            show,
+            reset,
+            theme,
+            max_commits,
+        } => {
             cmd_config(*show, *reset, theme.as_deref(), *max_commits)?;
         }
         Commands::Remote { list, add, remove } => {
             cmd_remote(*list, add.as_deref(), remove.as_deref())?;
         }
-        Commands::Tag { list, create, delete, message } => {
-            cmd_tag(*list, create.as_deref(), delete.as_deref(), message.as_deref())?;
+        Commands::Tag {
+            list,
+            create,
+            delete,
+            message,
+        } => {
+            cmd_tag(
+                *list,
+                create.as_deref(),
+                delete.as_deref(),
+                message.as_deref(),
+            )?;
         }
     }
 
     Ok(())
 }
 
-fn cmd_log(simple: bool, _branch: Option<&str>, _remote: bool, max_count: Option<usize>) -> Result<()> {
+fn cmd_log(
+    simple: bool,
+    _branch: Option<&str>,
+    _remote: bool,
+    max_count: Option<usize>,
+) -> Result<()> {
     let repo_path = std::env::current_dir().context("Not in a directory")?;
 
     let commits = get_commits(&repo_path, max_count)?;
@@ -159,15 +187,18 @@ fn cmd_branch(name: Option<&str>, remote: bool, all: bool) -> Result<()> {
         let branches = get_branches(&repo_path)?;
         let current = get_current_branch(&repo_path)?;
 
-        let filtered_branches: Vec<_> = branches.iter().filter(|b| {
-            if remote && !all {
-                b.ref_type == openisl_git::RefType::Remote
-            } else if all {
-                true
-            } else {
-                b.ref_type != openisl_git::RefType::Remote
-            }
-        }).collect();
+        let filtered_branches: Vec<_> = branches
+            .iter()
+            .filter(|b| {
+                if remote && !all {
+                    b.ref_type == openisl_git::RefType::Remote
+                } else if all {
+                    true
+                } else {
+                    b.ref_type != openisl_git::RefType::Remote
+                }
+            })
+            .collect();
 
         println!("Branches:");
         for git_ref in &filtered_branches {
@@ -230,7 +261,12 @@ fn cmd_diff(_staged: bool, _commit: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-fn cmd_config(show: bool, reset: bool, theme: Option<&str>, max_commits: Option<usize>) -> Result<()> {
+fn cmd_config(
+    show: bool,
+    reset: bool,
+    theme: Option<&str>,
+    max_commits: Option<usize>,
+) -> Result<()> {
     if reset {
         let config = Config::default();
         config.save()?;
@@ -275,7 +311,12 @@ fn cmd_remote(list: bool, add: Option<&str>, remove: Option<&str>) -> Result<()>
             println!("No remotes configured");
         } else {
             for remote in remotes {
-                println!("{}  {} ({})", remote.name, remote.url, remote.fetch_type.trim());
+                println!(
+                    "{}  {} ({})",
+                    remote.name,
+                    remote.url,
+                    remote.fetch_type.trim()
+                );
             }
         }
     } else if let Some(_name) = add {
@@ -288,7 +329,12 @@ fn cmd_remote(list: bool, add: Option<&str>, remove: Option<&str>) -> Result<()>
     Ok(())
 }
 
-fn cmd_tag(list: bool, create: Option<&str>, delete: Option<&str>, message: Option<&str>) -> Result<()> {
+fn cmd_tag(
+    list: bool,
+    create: Option<&str>,
+    delete: Option<&str>,
+    message: Option<&str>,
+) -> Result<()> {
     let repo_path = std::env::current_dir().context("Not in a directory")?;
 
     if list {
@@ -320,7 +366,12 @@ mod tests {
         let args = vec!["openisl", "log", "--max-count", "10"];
         let cli = Cli::parse_from(&args);
         match &cli.command {
-            Commands::Log { simple: _, branch: _, remote: _, max_count } => {
+            Commands::Log {
+                simple: _,
+                branch: _,
+                remote: _,
+                max_count,
+            } => {
                 assert_eq!(*max_count, Some(10));
             }
             _ => panic!("Expected Log command"),

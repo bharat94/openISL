@@ -1,6 +1,6 @@
+use crate::command::run;
 use anyhow::{Context, Result};
 use std::path::Path;
-use crate::command::run;
 
 pub fn get_diff(repo_path: &Path, commit: Option<&str>, staged: bool) -> Result<String> {
     let mut args = vec!["diff"];
@@ -25,8 +25,12 @@ pub fn get_commit_diff(repo_path: &Path, commit_hash: &str) -> Result<String> {
         get_commit_content(commit_hash)
     } else {
         let args = vec!["diff", &parent_hash, commit_hash];
-        run(&args, Some(repo_path))
-            .with_context(|| format!("Failed to get diff between {} and {}", parent_hash, commit_hash))
+        run(&args, Some(repo_path)).with_context(|| {
+            format!(
+                "Failed to get diff between {} and {}",
+                parent_hash, commit_hash
+            )
+        })
     }
 }
 
@@ -48,7 +52,10 @@ fn get_commit_content(commit_hash: &str) -> Result<String> {
     let output = run(&args, None)
         .with_context(|| format!("Failed to get commit content for: {}", commit_hash))?;
 
-    Ok(format!("Initial commit: {}\n\nNo parent diff available (use 'git show' for details)", output.trim()))
+    Ok(format!(
+        "Initial commit: {}\n\nNo parent diff available (use 'git show' for details)",
+        output.trim()
+    ))
 }
 
 #[cfg(test)]

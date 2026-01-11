@@ -7,15 +7,22 @@ use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
     terminal::{disable_raw_mode, enable_raw_mode},
 };
-use openisl_git::{get_commit_diff, Commit};
+use openisl_git::{get_commit_diff, Commit, FileStatus, GitRef};
 use ratatui::{
     backend::CrosstermBackend,
-    layout::{Alignment, Constraint, Direction, Layout},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     prelude::{Color, Line, Modifier, Style},
-    widgets::{Block, BorderType, Borders, Paragraph, Widget},
+    widgets::{Block, BorderType, Borders, List, ListItem, Paragraph, Widget},
     Terminal,
 };
 use std::io::stdout;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PanelType {
+    Files,
+    Branches,
+    Commits,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ViewMode {
@@ -27,6 +34,7 @@ pub enum ViewMode {
     Search,
     Filter,
     Stats,
+    CommandPalette,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -34,6 +42,14 @@ pub enum FilterMode {
     Author,
     Message,
     Date,
+}
+
+#[derive(Clone, Debug)]
+pub struct CommandAction {
+    pub name: String,
+    pub description: String,
+    pub action: String,
+    pub keys: Vec<String>,
 }
 
 #[derive(Debug, Default)]
@@ -70,6 +86,16 @@ pub struct App {
     pub is_filtering: bool,
     pub show_stats: bool,
     pub stats: RepoStats,
+    pub sidebar_visible: bool,
+    pub active_panel: PanelType,
+    pub files: Vec<FileStatus>,
+    pub selected_file_index: usize,
+    pub file_scroll_offset: usize,
+    pub branches: Vec<GitRef>,
+    pub selected_branch_index: usize,
+    pub branch_scroll_offset: usize,
+    pub command_palette_input: String,
+    pub command_palette_results: Vec<CommandAction>,
 }
 
 impl App {
@@ -102,9 +128,103 @@ impl App {
             is_filtering: false,
             show_stats: false,
             stats: RepoStats::default(),
+            sidebar_visible: true,
+            active_panel: PanelType::Commits,
+            files: Vec::new(),
+            selected_file_index: 0,
+            file_scroll_offset: 0,
+            branches: Vec::new(),
+            selected_branch_index: 0,
+            branch_scroll_offset: 0,
+            command_palette_input: String::new(),
+            command_palette_results: Vec::new(),
         };
         app.calculate_stats();
+        app.populate_command_palette();
         app
+    }
+
+    fn populate_command_palette(&mut self) {
+        self.command_palette_results = vec![
+            CommandAction {
+                name: "Toggle Sidebar".to_string(),
+                description: "Show/hide the sidebar panel".to_string(),
+                action: "toggle_sidebar".to_string(),
+                keys: vec!["Ctrl+B".to_string()],
+            },
+            CommandAction {
+                name: "Next Panel".to_string(),
+                description: "Move focus to next panel".to_string(),
+                action: "next_panel".to_string(),
+                keys: vec!["Tab".to_string(), "→".to_string(), "l".to_string()],
+            },
+            CommandAction {
+                name: "Previous Panel".to_string(),
+                description: "Move focus to previous panel".to_string(),
+                action: "prev_panel".to_string(),
+                keys: vec!["Shift+Tab".to_string(), "←".to_string(), "h".to_string()],
+            },
+            CommandAction {
+                name: "Navigate Up".to_string(),
+                description: "Move selection up".to_string(),
+                action: "move_up".to_string(),
+                keys: vec!["k".to_string(), "↑".to_string()],
+            },
+            CommandAction {
+                name: "Navigate Down".to_string(),
+                description: "Move selection down".to_string(),
+                action: "move_down".to_string(),
+                keys: vec!["j".to_string(), "↓".to_string()],
+            },
+            CommandAction {
+                name: "Go to Start".to_string(),
+                description: "Jump to first item".to_string(),
+                action: "go_to_start".to_string(),
+                keys: vec!["gg".to_string(), "Home".to_string()],
+            },
+            CommandAction {
+                name: "Go to End".to_string(),
+                description: "Jump to last item".to_string(),
+                action: "go_to_end".to_string(),
+                keys: vec!["G".to_string(), "End".to_string()],
+            },
+            CommandAction {
+                name: "View Details".to_string(),
+                description: "Show commit/file details".to_string(),
+                action: "view_details".to_string(),
+                keys: vec!["Enter".to_string()],
+            },
+            CommandAction {
+                name: "Search".to_string(),
+                description: "Search commits or files".to_string(),
+                action: "search".to_string(),
+                keys: vec!["/".to_string()],
+            },
+            CommandAction {
+                name: "Toggle Theme".to_string(),
+                description: "Switch between dark/light theme".to_string(),
+                action: "toggle_theme".to_string(),
+                keys: vec!["t".to_string()],
+            },
+            CommandAction {
+                name: "Show Help".to_string(),
+                description: "Display keyboard shortcuts".to_string(),
+                action: "help".to_string(),
+                keys: vec!["?".to_string()],
+            },
+            CommandAction {
+                name: "Quit".to_string(),
+                description: "Exit openisl".to_string(),
+                action: "quit".to_string(),
+                keys: vec!["q".to_string(), "Esc".to_string()],
+            },
+            CommandAction {
+                name: "Command Palette".to_string(),
+                description: "Open command search".to_string(),
+                action: "command_palette".to_string(),
+                keys: vec!["Ctrl+P".to_string()],
+            },
+        ];
     }
 
     pub fn set_commits(&mut self, commits: Vec<Commit>) {
@@ -289,6 +409,137 @@ impl App {
         }
     }
 
+    pub fn toggle_sidebar(&mut self) {
+        self.sidebar_visible = !self.sidebar_visible;
+    }
+
+    pub fn next_panel(&mut self) {
+        self.active_panel = match self.active_panel {
+            PanelType::Files => PanelType::Branches,
+            PanelType::Branches => PanelType::Commits,
+            PanelType::Commits => PanelType::Files,
+        };
+        self.status_message = format!("Switched to {} panel", self.panel_name());
+    }
+
+    pub fn prev_panel(&mut self) {
+        self.active_panel = match self.active_panel {
+            PanelType::Files => PanelType::Commits,
+            PanelType::Branches => PanelType::Files,
+            PanelType::Commits => PanelType::Branches,
+        };
+        self.status_message = format!("Switched to {} panel", self.panel_name());
+    }
+
+    fn panel_name(&self) -> String {
+        match self.active_panel {
+            PanelType::Files => "Files",
+            PanelType::Branches => "Branches",
+            PanelType::Commits => "Commits",
+        }
+        .to_string()
+    }
+
+    pub fn open_command_palette(&mut self) {
+        self.view_mode = ViewMode::CommandPalette;
+        self.command_palette_input.clear();
+        self.filter_command_palette();
+        self.status_message = "Type to search commands".to_string();
+    }
+
+    pub fn filter_command_palette(&mut self) {
+        if self.command_palette_input.is_empty() {
+            self.command_palette_results = Self::get_all_commands();
+        } else {
+            let query = self.command_palette_input.to_lowercase();
+            self.command_palette_results = Self::get_all_commands()
+                .into_iter()
+                .filter(|action| {
+                    action.name.to_lowercase().contains(&query)
+                        || action.description.to_lowercase().contains(&query)
+                        || action.action.contains(&query)
+                })
+                .collect();
+        }
+    }
+
+    fn get_all_commands() -> Vec<CommandAction> {
+        vec![
+            CommandAction {
+                name: "Toggle Sidebar".to_string(),
+                description: "Show/hide the sidebar panel".to_string(),
+                action: "toggle_sidebar".to_string(),
+                keys: vec!["Ctrl+B".to_string()],
+            },
+            CommandAction {
+                name: "Next Panel".to_string(),
+                description: "Move focus to next panel".to_string(),
+                action: "next_panel".to_string(),
+                keys: vec!["Tab".to_string(), "→".to_string(), "l".to_string()],
+            },
+            CommandAction {
+                name: "Previous Panel".to_string(),
+                description: "Move focus to previous panel".to_string(),
+                action: "prev_panel".to_string(),
+                keys: vec!["Shift+Tab".to_string(), "←".to_string(), "h".to_string()],
+            },
+            CommandAction {
+                name: "Navigate Up".to_string(),
+                description: "Move selection up".to_string(),
+                action: "move_up".to_string(),
+                keys: vec!["k".to_string(), "↑".to_string()],
+            },
+            CommandAction {
+                name: "Navigate Down".to_string(),
+                description: "Move selection down".to_string(),
+                action: "move_down".to_string(),
+                keys: vec!["j".to_string(), "↓".to_string()],
+            },
+            CommandAction {
+                name: "Go to Start".to_string(),
+                description: "Jump to first item".to_string(),
+                action: "go_to_start".to_string(),
+                keys: vec!["gg".to_string(), "Home".to_string()],
+            },
+            CommandAction {
+                name: "Go to End".to_string(),
+                description: "Jump to last item".to_string(),
+                action: "go_to_end".to_string(),
+                keys: vec!["G".to_string(), "End".to_string()],
+            },
+            CommandAction {
+                name: "View Details".to_string(),
+                description: "Show commit/file details".to_string(),
+                action: "view_details".to_string(),
+                keys: vec!["Enter".to_string()],
+            },
+            CommandAction {
+                name: "Search".to_string(),
+                description: "Search commits or files".to_string(),
+                action: "search".to_string(),
+                keys: vec!["/".to_string()],
+            },
+            CommandAction {
+                name: "Toggle Theme".to_string(),
+                description: "Switch between dark/light theme".to_string(),
+                action: "toggle_theme".to_string(),
+                keys: vec!["t".to_string()],
+            },
+            CommandAction {
+                name: "Show Help".to_string(),
+                description: "Display keyboard shortcuts".to_string(),
+                action: "help".to_string(),
+                keys: vec!["?".to_string()],
+            },
+            CommandAction {
+                name: "Quit".to_string(),
+                description: "Exit openisl".to_string(),
+                action: "quit".to_string(),
+                keys: vec!["q".to_string(), "Esc".to_string()],
+            },
+        ]
+    }
+
     pub fn handle_key(&mut self, key: KeyEvent) -> bool {
         match self.view_mode {
             ViewMode::List => self.handle_list_key(key),
@@ -299,6 +550,7 @@ impl App {
             ViewMode::Search => self.handle_search_key(key),
             ViewMode::Filter => self.handle_filter_key(key),
             ViewMode::Stats => self.handle_stats_key(key),
+            ViewMode::CommandPalette => self.handle_command_palette_key(key),
         }
     }
 
@@ -316,6 +568,24 @@ impl App {
             KeyCode::Home => self.go_to_start(),
             KeyCode::End => self.go_to_end(),
             KeyCode::Enter => self.view_mode = ViewMode::Details,
+            KeyCode::Tab => self.next_panel(),
+            KeyCode::BackTab => self.prev_panel(),
+            KeyCode::Char('h') | KeyCode::Left => {
+                if self.sidebar_visible {
+                    self.prev_panel();
+                }
+            }
+            KeyCode::Char('l') | KeyCode::Right => {
+                if self.sidebar_visible {
+                    self.next_panel();
+                }
+            }
+            KeyCode::Char('b') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.toggle_sidebar();
+            }
+            KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.open_command_palette();
+            }
             KeyCode::Char('/') => {
                 self.is_searching = true;
                 self.search_query.clear();
@@ -355,7 +625,7 @@ impl App {
                 self.apply_filter();
                 self.status_message = format!("Filter: {} commits", self.filtered_commits.len());
             }
-            KeyCode::Char('t') => self.theme.toggle(),
+            KeyCode::Char('t') => self.theme.next(),
             _ => {}
         }
         false
@@ -414,6 +684,66 @@ impl App {
             _ => {}
         }
         false
+    }
+
+    fn handle_command_palette_key(&mut self, key: KeyEvent) -> bool {
+        match key.code {
+            KeyCode::Esc => {
+                self.view_mode = ViewMode::List;
+                self.status_message.clear();
+                return false;
+            }
+            KeyCode::Enter => {
+                if !self.command_palette_results.is_empty() {
+                    let action = self.command_palette_results[0].action.clone();
+                    self.execute_command(&action);
+                }
+                self.view_mode = ViewMode::List;
+                self.status_message.clear();
+                return false;
+            }
+            KeyCode::Backspace => {
+                self.command_palette_input.pop();
+                self.filter_command_palette();
+            }
+            KeyCode::Char(c) => {
+                self.command_palette_input.push(c);
+                self.filter_command_palette();
+            }
+            KeyCode::Up => {
+                if !self.command_palette_results.is_empty() {
+                    self.command_palette_results.rotate_right(1);
+                }
+            }
+            KeyCode::Down => {
+                if !self.command_palette_results.is_empty() {
+                    self.command_palette_results.rotate_left(1);
+                }
+            }
+            _ => {}
+        }
+        false
+    }
+
+    fn execute_command(&mut self, action: &str) {
+        match action {
+            "toggle_sidebar" => self.toggle_sidebar(),
+            "next_panel" => self.next_panel(),
+            "prev_panel" => self.prev_panel(),
+            "move_up" => self.move_up(),
+            "move_down" => self.move_down(),
+            "go_to_start" => self.go_to_start(),
+            "go_to_end" => self.go_to_end(),
+            "view_details" => self.view_mode = ViewMode::Details,
+            "search" => {
+                self.is_searching = true;
+                self.search_query.clear();
+            }
+            "toggle_theme" => self.theme.next(),
+            "help" => self.view_mode = ViewMode::Help,
+            "quit" => {}
+            _ => {}
+        }
     }
 
     fn handle_search_key(&mut self, key: KeyEvent) -> bool {
@@ -634,6 +964,7 @@ pub fn run_tui(
             ViewMode::Search => render_search_view(&app, frame),
             ViewMode::Filter => render_filter_view(&app, frame),
             ViewMode::Stats => render_stats_view(&app, frame),
+            ViewMode::CommandPalette => render_command_palette(&app, frame),
         })?;
 
         if event::poll(std::time::Duration::from_millis(50))? {
@@ -654,6 +985,191 @@ pub fn run_tui(
 
 fn render_list_view(app: &App, frame: &mut ratatui::Frame) {
     let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(if app.sidebar_visible { 30 } else { 0 }),
+            Constraint::Min(10),
+        ])
+        .split(frame.size());
+
+    if app.sidebar_visible {
+        render_sidebar(app, chunks[0], frame);
+    }
+
+    render_main_content(app, chunks[1], frame);
+
+    render_footer(app, frame.size(), frame);
+}
+
+fn render_sidebar(app: &App, area: Rect, frame: &mut ratatui::Frame) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Length(3),
+            Constraint::Min(10),
+        ])
+        .split(area);
+
+    render_panel_tab(app, PanelType::Files, " FILES ", chunks[0], frame);
+    render_panel_tab(app, PanelType::Branches, " BRANCHES ", chunks[1], frame);
+
+    match app.active_panel {
+        PanelType::Files => render_files_panel(app).render(chunks[2], frame.buffer_mut()),
+        PanelType::Branches => render_branches_panel(app).render(chunks[2], frame.buffer_mut()),
+        PanelType::Commits => render_commits_panel(app).render(chunks[2], frame.buffer_mut()),
+    }
+}
+
+fn render_panel_tab(
+    app: &App,
+    panel_type: PanelType,
+    title: &str,
+    area: Rect,
+    frame: &mut ratatui::Frame,
+) {
+    let is_active = app.active_panel == panel_type;
+    let style = if is_active {
+        Style::default()
+            .fg(app.theme.selected)
+            .bg(app.theme.selected_bg)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(app.theme.text).bg(app.theme.background)
+    };
+
+    let block = Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Plain)
+        .style(style);
+
+    block.render(area, frame.buffer_mut());
+}
+
+fn render_files_panel(app: &App) -> impl Widget {
+    let items: Vec<ListItem<'static>> = app
+        .files
+        .iter()
+        .map(|file| {
+            let status = match file.status {
+                openisl_git::StatusType::Modified => "M",
+                openisl_git::StatusType::Added => "A",
+                openisl_git::StatusType::Deleted => "D",
+                openisl_git::StatusType::Untracked => "?",
+                openisl_git::StatusType::ModifiedStaged => "M*",
+                openisl_git::StatusType::AddedStaged => "A*",
+                openisl_git::StatusType::DeletedStaged => "D*",
+                openisl_git::StatusType::Renamed => "R",
+                openisl_git::StatusType::Conflicted => "C",
+            };
+            let content = format!("{} {}", status, file.path);
+            let is_selected = app.selected_file_index
+                == app
+                    .files
+                    .iter()
+                    .position(|f| f.path == file.path)
+                    .unwrap_or(0);
+            let style = if is_selected {
+                Style::default()
+                    .fg(app.theme.selected)
+                    .bg(app.theme.selected_bg)
+            } else {
+                Style::default().fg(app.theme.text)
+            };
+            ListItem::new(content).style(style)
+        })
+        .collect();
+
+    let list = List::new(items).block(
+        Block::default()
+            .title(format!("Files ({})", app.files.len()))
+            .borders(Borders::ALL)
+            .border_type(BorderType::Plain)
+            .style(Style::default().fg(app.theme.border)),
+    );
+
+    list
+}
+
+fn render_branches_panel(app: &App) -> impl Widget {
+    let items: Vec<ListItem<'static>> = app
+        .branches
+        .iter()
+        .map(|branch| {
+            let is_current = branch.name == app.current_branch;
+            let prefix = if is_current { "●" } else { "○" };
+            let content = format!("{} {}", prefix, branch.name);
+            let is_selected = app.selected_branch_index
+                == app
+                    .branches
+                    .iter()
+                    .position(|b| b.name == branch.name)
+                    .unwrap_or(0);
+            let style = if is_selected {
+                Style::default()
+                    .fg(app.theme.selected)
+                    .bg(app.theme.selected_bg)
+            } else {
+                Style::default().fg(app.theme.text)
+            };
+            ListItem::new(content).style(style)
+        })
+        .collect();
+
+    let list = List::new(items).block(
+        Block::default()
+            .title(format!("Branches ({})", app.branches.len()))
+            .borders(Borders::ALL)
+            .border_type(BorderType::Plain)
+            .style(Style::default().fg(app.theme.border)),
+    );
+
+    list
+}
+
+fn render_commits_panel(app: &App) -> impl Widget {
+    let visible_count = 15;
+    let raw_lines = format_tree_lines(app.tree.nodes(), app.scroll_offset, visible_count);
+
+    let lines: Vec<Line<'static>> = raw_lines
+        .into_iter()
+        .enumerate()
+        .map(|(i, line)| {
+            let global_index = app.scroll_offset + i;
+            let is_selected = global_index == app.selected_index;
+            let line_clone = line.clone();
+
+            if is_selected {
+                Line::from(line_clone).style(
+                    Style::default()
+                        .fg(app.theme.selected)
+                        .add_modifier(Modifier::BOLD)
+                        .bg(app.theme.selected_bg),
+                )
+            } else {
+                Line::from(line_clone).style(Style::default().fg(app.theme.text))
+            }
+        })
+        .collect();
+
+    let list = List::new(lines).block(
+        Block::default()
+            .title(format!(
+                "Commits ({}/{})",
+                app.selected_index + 1,
+                app.commits.len()
+            ))
+            .borders(Borders::ALL)
+            .border_type(BorderType::Plain)
+            .style(Style::default().fg(app.theme.border)),
+    );
+
+    list
+}
+
+fn render_main_content(app: &App, area: Rect, frame: &mut ratatui::Frame) {
+    let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(2),
@@ -661,36 +1177,44 @@ fn render_list_view(app: &App, frame: &mut ratatui::Frame) {
             Constraint::Length(1),
             Constraint::Length(2),
         ])
-        .split(frame.size());
+        .split(area);
 
-    let title = Paragraph::new("openisl log")
-        .style(
-            Style::default()
-                .fg(app.theme.title)
-                .add_modifier(Modifier::BOLD),
-        )
-        .alignment(Alignment::Center);
+    let title = Paragraph::new(format!(
+        "openisl - {} - {}",
+        app.repo_path
+            .as_ref()
+            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+            .unwrap_or_else(|| "Unknown".to_string()),
+        app.current_branch
+    ))
+    .style(
+        Style::default()
+            .fg(app.theme.title)
+            .add_modifier(Modifier::BOLD),
+    )
+    .alignment(Alignment::Left);
     title.render(chunks[0], frame.buffer_mut());
 
-    let visible_count = 20;
+    let visible_count = 15;
     let raw_lines = format_tree_lines(app.tree.nodes(), app.scroll_offset, visible_count);
 
-    let lines: Vec<Line> = raw_lines
-        .iter()
+    let lines: Vec<Line<'static>> = raw_lines
+        .into_iter()
         .enumerate()
         .map(|(i, line)| {
             let global_index = app.scroll_offset + i;
             let is_selected = global_index == app.selected_index;
+            let line_clone = line.clone();
 
             if is_selected {
-                Line::from(line.as_str()).style(
+                Line::from(line_clone).style(
                     Style::default()
                         .fg(app.theme.selected)
                         .add_modifier(Modifier::BOLD)
                         .bg(app.theme.selected_bg),
                 )
             } else {
-                Line::from(line.as_str()).style(Style::default().fg(app.theme.text))
+                Line::from(line_clone).style(Style::default().fg(app.theme.text))
             }
         })
         .collect();
@@ -718,22 +1242,97 @@ fn render_list_view(app: &App, frame: &mut ratatui::Frame) {
         .style(Style::default().fg(Color::Yellow))
         .alignment(Alignment::Left);
     status_widget.render(chunks[2], frame.buffer_mut());
+}
+
+fn render_command_palette(app: &App, frame: &mut ratatui::Frame) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(5),
+            Constraint::Min(10),
+            Constraint::Length(2),
+        ])
+        .split(frame.size());
+
+    let title = Paragraph::new("Command Palette")
+        .style(
+            Style::default()
+                .fg(app.theme.title)
+                .add_modifier(Modifier::BOLD),
+        )
+        .alignment(Alignment::Center);
+    title.render(chunks[0], frame.buffer_mut());
+
+    let input_line = format!("> {}", app.command_palette_input);
+    let input_widget = Paragraph::new(input_line)
+        .style(
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )
+        .block(
+            Block::default()
+                .title("Search commands")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Plain)
+                .style(Style::default().fg(app.theme.border)),
+        );
+    input_widget.render(chunks[1], frame.buffer_mut());
+
+    let results: Vec<ListItem> = app
+        .command_palette_results
+        .iter()
+        .take(10)
+        .enumerate()
+        .map(|(i, action)| {
+            let keys = action.keys.join(", ");
+            let content = format!("{} - {} ({})", action.name, action.description, keys);
+            let style = if i == 0 {
+                Style::default()
+                    .fg(app.theme.selected)
+                    .bg(app.theme.selected_bg)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(app.theme.text)
+            };
+            ListItem::new(content).style(style)
+        })
+        .collect();
+
+    let results_list = List::new(results).block(
+        Block::default()
+            .title(format!("Results ({})", app.command_palette_results.len()))
+            .borders(Borders::ALL)
+            .border_type(BorderType::Plain)
+            .style(Style::default().fg(app.theme.border)),
+    );
+    results_list.render(chunks[1], frame.buffer_mut());
 
     let help_text = format!(
-        "{}: Details | {}: Checkout | {}: New Branch | {}: Diff | {}: Help | {}: Theme | {}: Quit | Theme: {}",
-        app.keybindings.actions.view_details,
-        app.keybindings.actions.checkout,
-        app.keybindings.actions.create_branch,
-        app.keybindings.actions.view_diff,
-        app.keybindings.actions.help,
-        app.keybindings.actions.toggle_theme,
-        app.keybindings.actions.quit,
+        "Enter: Execute | ↑↓/jk: Navigate | Esc: Cancel | Theme: {}",
         app.theme.name()
     );
     let help_widget = Paragraph::new(help_text)
         .style(Style::default().fg(app.theme.help))
         .alignment(Alignment::Center);
-    help_widget.render(chunks[3], frame.buffer_mut());
+    help_widget.render(chunks[2], frame.buffer_mut());
+}
+
+fn render_footer(app: &App, area: Rect, frame: &mut ratatui::Frame) {
+    let help_text = format!(
+        "{}: Panels | {}: Details | {}: Search | {}: Palette | {}: Help | {}: Theme | {}: Quit",
+        "←→/Tab",
+        app.keybindings.actions.view_details,
+        "/",
+        "Ctrl+P",
+        app.keybindings.actions.help,
+        app.keybindings.actions.toggle_theme,
+        app.keybindings.actions.quit,
+    );
+    let help_widget = Paragraph::new(help_text)
+        .style(Style::default().fg(app.theme.help))
+        .alignment(Alignment::Center);
+    help_widget.render(area, frame.buffer_mut());
 }
 
 fn render_details_view(app: &App, frame: &mut ratatui::Frame) {
@@ -1453,10 +2052,16 @@ mod tests {
         let mut theme = Theme::dark();
         assert_eq!(theme.name(), "dark");
 
-        theme.toggle();
+        theme.next();
         assert_eq!(theme.name(), "light");
 
-        theme.toggle();
+        theme.next();
+        assert_eq!(theme.name(), "monokai");
+
+        theme.next();
+        assert_eq!(theme.name(), "nord");
+
+        theme.next();
         assert_eq!(theme.name(), "dark");
     }
 
@@ -1777,13 +2382,9 @@ mod tests {
         let commits = create_test_commits();
         let mut app = App::new(commits, "main".to_string(), None);
 
-        app.search_query = "commit".to_string();
-        app.search();
-        app.next_search_result();
-
-        let initial_index = app.selected_index;
+        assert_eq!(app.view_mode, ViewMode::List);
         app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL));
-        assert_ne!(app.selected_index, initial_index);
+        assert_eq!(app.view_mode, ViewMode::CommandPalette);
     }
 
     #[test]
@@ -1991,5 +2592,134 @@ mod tests {
     fn test_view_mode_filter_and_stats() {
         assert_eq!(ViewMode::Filter as u8, 6);
         assert_eq!(ViewMode::Stats as u8, 7);
+    }
+
+    #[test]
+    fn test_sidebar_toggle() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        assert!(app.sidebar_visible);
+        app.toggle_sidebar();
+        assert!(!app.sidebar_visible);
+        app.toggle_sidebar();
+        assert!(app.sidebar_visible);
+    }
+
+    #[test]
+    fn test_panel_navigation() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        assert_eq!(app.active_panel, PanelType::Commits);
+        app.next_panel();
+        assert_eq!(app.active_panel, PanelType::Files);
+        app.next_panel();
+        assert_eq!(app.active_panel, PanelType::Branches);
+        app.next_panel();
+        assert_eq!(app.active_panel, PanelType::Commits);
+
+        app.prev_panel();
+        assert_eq!(app.active_panel, PanelType::Branches);
+        app.prev_panel();
+        assert_eq!(app.active_panel, PanelType::Files);
+        app.prev_panel();
+        assert_eq!(app.active_panel, PanelType::Commits);
+    }
+
+    #[test]
+    fn test_vim_keybindings_gg_go_to_start() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.selected_index = 2;
+        assert_eq!(app.selected_index, 2);
+
+        app.handle_key(KeyEvent::new(KeyCode::Home, KeyModifiers::NONE));
+        assert_eq!(app.selected_index, 0);
+    }
+
+    #[test]
+    fn test_vim_keybindings_g_go_to_end() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        assert_eq!(app.selected_index, 0);
+        app.handle_key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE));
+        assert_eq!(app.selected_index, 2);
+    }
+
+    #[test]
+    fn test_theme_cycle() {
+        let mut theme = Theme::dark();
+        assert_eq!(theme.name(), "dark");
+
+        theme.next();
+        assert_eq!(theme.name(), "light");
+
+        theme.next();
+        assert_eq!(theme.name(), "monokai");
+
+        theme.next();
+        assert_eq!(theme.name(), "nord");
+
+        theme.next();
+        assert_eq!(theme.name(), "dark");
+    }
+
+    #[test]
+    fn test_theme_set() {
+        let mut theme = Theme::dark();
+        theme.set("monokai");
+        assert_eq!(theme.name(), "monokai");
+        theme.set("nord");
+        assert_eq!(theme.name(), "nord");
+        theme.set("invalid");
+        assert_eq!(theme.name(), "dark");
+    }
+
+    #[test]
+    fn test_command_palette_opens() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        assert_eq!(app.view_mode, ViewMode::List);
+        app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL));
+        assert_eq!(app.view_mode, ViewMode::CommandPalette);
+    }
+
+    #[test]
+    fn test_command_palette_filter() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.view_mode = ViewMode::CommandPalette;
+        app.command_palette_input = "theme".to_string();
+        app.filter_command_palette();
+
+        assert!(!app.command_palette_results.is_empty());
+        assert!(app
+            .command_palette_results
+            .iter()
+            .any(|r| r.name.contains("Theme")));
+    }
+
+    #[test]
+    fn test_panel_type_values() {
+        assert_eq!(PanelType::Files as u8, 0);
+        assert_eq!(PanelType::Branches as u8, 1);
+        assert_eq!(PanelType::Commits as u8, 2);
+    }
+
+    #[test]
+    fn test_command_palette_execute() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        assert!(app.sidebar_visible);
+        app.execute_command("toggle_sidebar");
+        assert!(!app.sidebar_visible);
+        app.execute_command("toggle_theme");
+        assert_eq!(app.theme.name(), "light");
     }
 }

@@ -37,20 +37,25 @@ impl SmartLogFormatter {
     fn build_graph(&self) -> Vec<GraphNode> {
         let main_branch = self.find_main_branch();
 
-        self.commits.iter().map(|commit| {
-            let is_main = commit.refs.iter().any(|r| {
-                r.name == main_branch || r.name == "main" || r.name == "master"
-            });
-            let has_children = self.commits.iter().any(|c| {
-                c.parent_hashes.contains(&commit.hash)
-            });
+        self.commits
+            .iter()
+            .map(|commit| {
+                let is_main = commit
+                    .refs
+                    .iter()
+                    .any(|r| r.name == main_branch || r.name == "main" || r.name == "master");
+                let has_children = self
+                    .commits
+                    .iter()
+                    .any(|c| c.parent_hashes.contains(&commit.hash));
 
-            GraphNode {
-                commit: commit.clone(),
-                is_main_branch: is_main,
-                has_children,
-            }
-        }).collect()
+                GraphNode {
+                    commit: commit.clone(),
+                    is_main_branch: is_main,
+                    has_children,
+                }
+            })
+            .collect()
     }
 
     fn find_main_branch(&self) -> String {
@@ -91,7 +96,10 @@ impl SmartLogFormatter {
         line.push(' ');
 
         if !node.commit.refs.is_empty() {
-            let branch_names: Vec<String> = node.commit.refs.iter()
+            let branch_names: Vec<String> = node
+                .commit
+                .refs
+                .iter()
                 .filter(|r| r.ref_type != crate::models::RefType::Remote)
                 .map(|r| {
                     let name = if r.name.starts_with("refs/heads/") {
@@ -117,7 +125,10 @@ impl SmartLogFormatter {
             50
         };
         let summary = if node.commit.summary.len() > max_summary_len {
-            format!("{}...", &node.commit.summary[..max_summary_len.saturating_sub(3)])
+            format!(
+                "{}...",
+                &node.commit.summary[..max_summary_len.saturating_sub(3)]
+            )
         } else {
             node.commit.summary.clone()
         };

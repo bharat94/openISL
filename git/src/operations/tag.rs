@@ -1,6 +1,6 @@
+use crate::command::run;
 use anyhow::{Context, Result};
 use std::path::Path;
-use crate::command::run;
 
 pub fn tag_list(repo_path: &Path) -> Result<Vec<Tag>> {
     let output = run(
@@ -18,10 +18,26 @@ pub fn tag_list(repo_path: &Path) -> Result<Vec<Tag>> {
         if !parts.is_empty() {
             tags.push(Tag {
                 name: parts[0].to_string(),
-                tagger: if parts.len() > 1 { parts[1].to_string() } else { String::new() },
-                email: if parts.len() > 2 { parts[2].to_string() } else { String::new() },
-                message: if parts.len() > 3 { parts[3].to_string() } else { String::new() },
-                date: if parts.len() > 4 { parts[4].to_string() } else { String::new() },
+                tagger: if parts.len() > 1 {
+                    parts[1].to_string()
+                } else {
+                    String::new()
+                },
+                email: if parts.len() > 2 {
+                    parts[2].to_string()
+                } else {
+                    String::new()
+                },
+                message: if parts.len() > 3 {
+                    parts[3].to_string()
+                } else {
+                    String::new()
+                },
+                date: if parts.len() > 4 {
+                    parts[4].to_string()
+                } else {
+                    String::new()
+                },
                 is_annotated: parts.len() > 1 && !parts[1].is_empty(),
             });
         }
@@ -30,7 +46,12 @@ pub fn tag_list(repo_path: &Path) -> Result<Vec<Tag>> {
     Ok(tags)
 }
 
-pub fn create_tag(repo_path: &Path, name: &str, message: Option<&str>, commit: Option<&str>) -> Result<()> {
+pub fn create_tag(
+    repo_path: &Path,
+    name: &str,
+    message: Option<&str>,
+    commit: Option<&str>,
+) -> Result<()> {
     let mut args = vec!["tag"];
 
     if let Some(msg) = message {
@@ -46,15 +67,13 @@ pub fn create_tag(repo_path: &Path, name: &str, message: Option<&str>, commit: O
         args.push(c);
     }
 
-    run(&args, Some(repo_path))
-        .with_context(|| format!("Failed to create tag '{}'", name))?;
+    run(&args, Some(repo_path)).with_context(|| format!("Failed to create tag '{}'", name))?;
     Ok(())
 }
 
 pub fn delete_tag(repo_path: &Path, name: &str) -> Result<()> {
     let args = vec!["tag", "-d", name];
-    run(&args, Some(repo_path))
-        .with_context(|| format!("Failed to delete tag '{}'", name))?;
+    run(&args, Some(repo_path)).with_context(|| format!("Failed to delete tag '{}'", name))?;
     Ok(())
 }
 

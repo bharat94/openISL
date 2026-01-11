@@ -1,11 +1,14 @@
-use anyhow::{Context, Result};
-use std::path::Path;
 use crate::command::run;
 use crate::models::{GitRef, RefType};
+use anyhow::{Context, Result};
+use std::path::Path;
 
 pub fn get_branches(repo_path: &Path) -> Result<Vec<GitRef>> {
-    let output = run(&["branch", "--format=%(refname:short)|%(refname:short)"], Some(repo_path))
-        .with_context(|| "Failed to get git branches")?;
+    let output = run(
+        &["branch", "--format=%(refname:short)|%(refname:short)"],
+        Some(repo_path),
+    )
+    .with_context(|| "Failed to get git branches")?;
 
     let mut refs = Vec::new();
     for line in output.lines() {
@@ -53,10 +56,18 @@ pub fn create_branch(repo_path: &Path, branch_name: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn create_branch_from_commit(repo_path: &Path, branch_name: &str, commit_hash: &str) -> Result<()> {
+pub fn create_branch_from_commit(
+    repo_path: &Path,
+    branch_name: &str,
+    commit_hash: &str,
+) -> Result<()> {
     let args = vec!["checkout", "-b", branch_name, commit_hash];
-    run(&args, Some(repo_path))
-        .with_context(|| format!("Failed to create branch '{}' from '{}'", branch_name, commit_hash))?;
+    run(&args, Some(repo_path)).with_context(|| {
+        format!(
+            "Failed to create branch '{}' from '{}'",
+            branch_name, commit_hash
+        )
+    })?;
     Ok(())
 }
 

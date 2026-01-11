@@ -1,4 +1,4 @@
-use openisl_git::{is_git_repo, find_repo_root};
+use openisl_git::{find_repo_root, is_git_repo};
 
 #[test]
 fn test_is_git_repo_in_repo() {

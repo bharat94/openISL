@@ -1,6 +1,6 @@
+use crate::command::run;
 use anyhow::{Context, Result};
 use std::path::Path;
-use crate::command::run;
 
 pub fn fetch(repo_path: &Path, remote: Option<&str>, prune: bool) -> Result<String> {
     let mut args = vec!["fetch"];
@@ -24,17 +24,21 @@ pub fn pull(repo_path: &Path, rebase: bool) -> Result<String> {
         args.push("--rebase");
     }
 
-    run(&args, Some(repo_path))
-        .with_context(|| "Failed to pull changes")
+    run(&args, Some(repo_path)).with_context(|| "Failed to pull changes")
 }
 
-pub fn push(repo_path: &Path, remote: Option<&str>, branch: Option<&str>, tags: bool, set_upstream: bool) -> Result<String> {
+pub fn push(
+    repo_path: &Path,
+    remote: Option<&str>,
+    branch: Option<&str>,
+    tags: bool,
+    set_upstream: bool,
+) -> Result<String> {
     let mut args = vec!["push"];
 
     if tags {
         args.push("--tags");
-        return run(&args, Some(repo_path))
-            .with_context(|| "Failed to push tags");
+        return run(&args, Some(repo_path)).with_context(|| "Failed to push tags");
     }
 
     if let Some(r) = remote {
@@ -49,8 +53,7 @@ pub fn push(repo_path: &Path, remote: Option<&str>, branch: Option<&str>, tags: 
         args.push("--set-upstream");
     }
 
-    run(&args, Some(repo_path))
-        .with_context(|| "Failed to push changes")
+    run(&args, Some(repo_path)).with_context(|| "Failed to push changes")
 }
 
 pub fn remote_add(repo_path: &Path, name: &str, url: &str) -> Result<()> {
@@ -61,8 +64,8 @@ pub fn remote_add(repo_path: &Path, name: &str, url: &str) -> Result<()> {
 }
 
 pub fn remote_list(repo_path: &Path) -> Result<Vec<Remote>> {
-    let output = run(&["remote", "-v"], Some(repo_path))
-        .with_context(|| "Failed to list remotes")?;
+    let output =
+        run(&["remote", "-v"], Some(repo_path)).with_context(|| "Failed to list remotes")?;
 
     let mut remotes = Vec::new();
     for line in output.lines() {
@@ -75,7 +78,11 @@ pub fn remote_list(repo_path: &Path) -> Result<Vec<Remote>> {
             remotes.push(Remote {
                 name: parts[0].to_string(),
                 url: parts[1].to_string(),
-                fetch_type: if parts.len() > 2 { parts[2].to_string() } else { String::new() },
+                fetch_type: if parts.len() > 2 {
+                    parts[2].to_string()
+                } else {
+                    String::new()
+                },
             });
         }
     }
@@ -85,8 +92,7 @@ pub fn remote_list(repo_path: &Path) -> Result<Vec<Remote>> {
 
 pub fn remote_remove(repo_path: &Path, name: &str) -> Result<()> {
     let args = vec!["remote", "remove", name];
-    run(&args, Some(repo_path))
-        .with_context(|| format!("Failed to remove remote '{}'", name))?;
+    run(&args, Some(repo_path)).with_context(|| format!("Failed to remove remote '{}'", name))?;
     Ok(())
 }
 

@@ -1,10 +1,10 @@
 pub mod app;
-pub mod theme;
-pub mod keybindings;
-pub mod tree;
 pub mod diff;
+pub mod keybindings;
+pub mod theme;
+pub mod tree;
 
-pub use app::{App, run_tui, ViewMode};
-pub use theme::Theme;
+pub use app::{run_tui, App, PanelType, ViewMode};
+pub use diff::{DiffLineType, DiffParser, DiffStats};
 pub use keybindings::KeyBindings;
-pub use diff::{DiffParser, DiffLineType, DiffStats};
+pub use theme::Theme;

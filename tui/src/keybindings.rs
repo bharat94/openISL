@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crossterm::event::KeyCode;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct KeyBindings {
@@ -90,13 +90,12 @@ impl KeyBindings {
     }
 
     pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let config_path = get_config_path()
-            .unwrap_or_else(|| {
-                let mut path = dirs::config_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
-                path.push("openisl");
-                path.push("keybindings.toml");
-                path
-            });
+        let config_path = get_config_path().unwrap_or_else(|| {
+            let mut path = dirs::config_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+            path.push("openisl");
+            path.push("keybindings.toml");
+            path
+        });
 
         std::fs::create_dir_all(config_path.parent().unwrap())?;
         let toml = toml::to_string_pretty(self)?;
@@ -104,7 +103,11 @@ impl KeyBindings {
         Ok(())
     }
 
-    pub fn parse_key(&self, key_code: KeyCode, modifiers: crossterm::event::KeyModifiers) -> Option<&str> {
+    pub fn parse_key(
+        &self,
+        key_code: KeyCode,
+        modifiers: crossterm::event::KeyModifiers,
+    ) -> Option<&str> {
         let key_str = format_key_code(key_code, modifiers);
 
         if self.actions.quit.contains(&key_str) {
@@ -202,21 +205,39 @@ mod tests {
     #[test]
     fn test_parse_key_up() {
         let bindings = KeyBindings::default();
-        assert_eq!(bindings.parse_key(KeyCode::Char('j'), crossterm::event::KeyModifiers::NONE), Some("up"));
-        assert_eq!(bindings.parse_key(KeyCode::Down, crossterm::event::KeyModifiers::NONE), Some("up"));
+        assert_eq!(
+            bindings.parse_key(KeyCode::Char('j'), crossterm::event::KeyModifiers::NONE),
+            Some("up")
+        );
+        assert_eq!(
+            bindings.parse_key(KeyCode::Down, crossterm::event::KeyModifiers::NONE),
+            Some("up")
+        );
     }
 
     #[test]
     fn test_parse_key_down() {
         let bindings = KeyBindings::default();
-        assert_eq!(bindings.parse_key(KeyCode::Char('k'), crossterm::event::KeyModifiers::NONE), Some("down"));
-        assert_eq!(bindings.parse_key(KeyCode::Up, crossterm::event::KeyModifiers::NONE), Some("down"));
+        assert_eq!(
+            bindings.parse_key(KeyCode::Char('k'), crossterm::event::KeyModifiers::NONE),
+            Some("down")
+        );
+        assert_eq!(
+            bindings.parse_key(KeyCode::Up, crossterm::event::KeyModifiers::NONE),
+            Some("down")
+        );
     }
 
     #[test]
     fn test_parse_key_quit() {
         let bindings = KeyBindings::default();
-        assert_eq!(bindings.parse_key(KeyCode::Char('q'), crossterm::event::KeyModifiers::NONE), Some("quit"));
-        assert_eq!(bindings.parse_key(KeyCode::Esc, crossterm::event::KeyModifiers::NONE), Some("quit"));
+        assert_eq!(
+            bindings.parse_key(KeyCode::Char('q'), crossterm::event::KeyModifiers::NONE),
+            Some("quit")
+        );
+        assert_eq!(
+            bindings.parse_key(KeyCode::Esc, crossterm::event::KeyModifiers::NONE),
+            Some("quit")
+        );
     }
 }

@@ -1,6 +1,6 @@
+use crate::command::run;
 use anyhow::{Context, Result};
 use std::path::Path;
-use crate::command::run;
 
 pub struct FileStatus {
     pub path: String,
@@ -50,7 +50,10 @@ pub fn get_status(repo_path: &Path) -> Result<Vec<FileStatus>> {
             _ => StatusType::Modified,
         };
 
-        files.push(FileStatus { path, status: status_type });
+        files.push(FileStatus {
+            path,
+            status: status_type,
+        });
     }
 
     Ok(files)

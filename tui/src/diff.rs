@@ -1,4 +1,4 @@
-use ratatui::{prelude::{Line, Style, Color, Modifier}};
+use ratatui::prelude::{Color, Line, Modifier, Style};
 
 #[derive(Debug, Clone)]
 pub struct ColoredDiffLine {
@@ -60,27 +60,41 @@ impl DiffParser {
         lines
     }
 
-    pub fn to_styled_lines(
-        lines: &[ColoredDiffLine],
-        dark_theme: bool,
-    ) -> Vec<Line<'static>> {
-        let addition_fg = if dark_theme { Color::Green } else { Color::LightGreen };
-        let deletion_fg = if dark_theme { Color::Red } else { Color::LightRed };
+    pub fn to_styled_lines(lines: &[ColoredDiffLine], dark_theme: bool) -> Vec<Line<'static>> {
+        let addition_fg = if dark_theme {
+            Color::Green
+        } else {
+            Color::LightGreen
+        };
+        let deletion_fg = if dark_theme {
+            Color::Red
+        } else {
+            Color::LightRed
+        };
         let header_fg = if dark_theme { Color::Cyan } else { Color::Blue };
         let meta_fg = Color::Yellow;
-        let context_fg = if dark_theme { Color::Gray } else { Color::DarkGray };
+        let context_fg = if dark_theme {
+            Color::Gray
+        } else {
+            Color::DarkGray
+        };
 
-        lines.iter().map(|line| {
-            let style = match line.line_type {
-                DiffLineType::Addition => Style::default().fg(addition_fg).add_modifier(Modifier::BOLD),
-                DiffLineType::Deletion => Style::default().fg(deletion_fg),
-                DiffLineType::Header => Style::default().fg(header_fg),
-                DiffLineType::Meta => Style::default().fg(meta_fg),
-                DiffLineType::Context => Style::default().fg(context_fg),
-            };
+        lines
+            .iter()
+            .map(|line| {
+                let style = match line.line_type {
+                    DiffLineType::Addition => Style::default()
+                        .fg(addition_fg)
+                        .add_modifier(Modifier::BOLD),
+                    DiffLineType::Deletion => Style::default().fg(deletion_fg),
+                    DiffLineType::Header => Style::default().fg(header_fg),
+                    DiffLineType::Meta => Style::default().fg(meta_fg),
+                    DiffLineType::Context => Style::default().fg(context_fg),
+                };
 
-            Line::styled(line.content.clone(), style)
-        }).collect()
+                Line::styled(line.content.clone(), style)
+            })
+            .collect()
     }
 
     pub fn count_stats(lines: &[ColoredDiffLine]) -> DiffStats {
@@ -147,10 +161,12 @@ mod tests {
         let diff = "fn old_function() {\n-    println!(\"removed\");\n }";
         let lines = DiffParser::parse(diff);
 
-        let additions: usize = lines.iter()
+        let additions: usize = lines
+            .iter()
             .filter(|l| l.line_type == DiffLineType::Addition)
             .count();
-        let deletions: usize = lines.iter()
+        let deletions: usize = lines
+            .iter()
             .filter(|l| l.line_type == DiffLineType::Deletion)
             .count();
 
@@ -171,8 +187,14 @@ mod tests {
     #[test]
     fn test_to_styled_lines_dark_theme() {
         let lines = vec![
-            ColoredDiffLine { content: "added line".to_string(), line_type: DiffLineType::Addition },
-            ColoredDiffLine { content: "deleted line".to_string(), line_type: DiffLineType::Deletion },
+            ColoredDiffLine {
+                content: "added line".to_string(),
+                line_type: DiffLineType::Addition,
+            },
+            ColoredDiffLine {
+                content: "deleted line".to_string(),
+                line_type: DiffLineType::Deletion,
+            },
         ];
 
         let styled = DiffParser::to_styled_lines(&lines, true);

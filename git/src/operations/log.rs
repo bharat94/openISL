@@ -1,8 +1,8 @@
+use crate::command::run;
+use crate::models::Commit;
 use anyhow::{Context, Result};
 use chrono::DateTime;
 use std::path::Path;
-use crate::command::run;
-use crate::models::Commit;
 
 const GIT_LOG_FORMAT: &str = "%H|%P|%an|%ae|%ad|%s";
 
@@ -146,7 +146,8 @@ mod tests {
 
     #[test]
     fn test_parse_commit_with_no_body() {
-        let input = "abc123||john@example.com|john@example.com|2024-01-10T12:00:00+00:00|Simple commit|";
+        let input =
+            "abc123||john@example.com|john@example.com|2024-01-10T12:00:00+00:00|Simple commit|";
         let commits = parse_commits(input).unwrap();
         assert_eq!(commits.len(), 1);
         assert_eq!(commits[0].summary, "Simple commit");
@@ -155,7 +156,8 @@ mod tests {
 
     #[test]
     fn test_parse_commit_with_empty_parents() {
-        let input = "abc123||john@example.com|john@example.com|2024-01-10T12:00:00+00:00|Root commit|";
+        let input =
+            "abc123||john@example.com|john@example.com|2024-01-10T12:00:00+00:00|Root commit|";
         let commits = parse_commits(input).unwrap();
         assert_eq!(commits.len(), 1);
         assert!(commits[0].parent_hashes.is_empty());

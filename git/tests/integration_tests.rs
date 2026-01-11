@@ -1,4 +1,7 @@
-use openisl_git::{Commit, GitRef, RefType, get_commits, get_branches, get_current_branch, get_status, StatusType, FileStatus};
+use openisl_git::{
+    get_branches, get_commits, get_current_branch, get_status, Commit, FileStatus, GitRef, RefType,
+    StatusType,
+};
 
 fn create_test_commit(
     hash: &str,
@@ -74,8 +77,10 @@ mod git_operations_tests {
         let repo_path = std::env::current_dir().unwrap();
         let commits = get_commits(&repo_path, Some(10)).unwrap();
         for i in 1..commits.len() {
-            assert!(commits[i-1].date >= commits[i].date,
-                "Commits should be in chronological order (newest first)");
+            assert!(
+                commits[i - 1].date >= commits[i].date,
+                "Commits should be in chronological order (newest first)"
+            );
         }
     }
 
@@ -113,7 +118,10 @@ mod git_operations_tests {
         let commits = get_commits(&std::env::current_dir().unwrap(), Some(1)).unwrap();
         if let Some(first) = commits.first() {
             if !first.parent_hashes.is_empty() {
-                println!("First commit has {} parents - this is expected for non-initial repos", first.parent_hashes.len());
+                println!(
+                    "First commit has {} parents - this is expected for non-initial repos",
+                    first.parent_hashes.len()
+                );
             }
         }
     }
@@ -358,9 +366,10 @@ mod serialization_tests {
             email: "test@example.com".to_string(),
             date: chrono::Utc::now(),
             parent_hashes: vec!["parent1".to_string(), "parent2".to_string()],
-            refs: vec![
-                GitRef { name: "main".to_string(), ref_type: RefType::Branch },
-            ],
+            refs: vec![GitRef {
+                name: "main".to_string(),
+                ref_type: RefType::Branch,
+            }],
         };
 
         let json = serde_json::to_string(&commit).unwrap();
