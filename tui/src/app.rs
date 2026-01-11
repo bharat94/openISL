@@ -1325,7 +1325,9 @@ fn render_sidebar(app: &App, area: Rect, frame: &mut ratatui::Frame) {
     match app.active_panel {
         PanelType::Files => render_files_panel(app).render(chunks[2], frame.buffer_mut()),
         PanelType::Branches => render_branches_panel(app).render(chunks[2], frame.buffer_mut()),
-        PanelType::Commits => render_commits_panel(app).render(chunks[2], frame.buffer_mut()),
+        PanelType::Commits => {
+            render_commits_panel(app, chunks[2]).render(chunks[2], frame.buffer_mut())
+        }
     }
 }
 
@@ -1436,8 +1438,9 @@ fn render_branches_panel(app: &App) -> impl Widget {
     list
 }
 
-fn render_commits_panel(app: &App) -> impl Widget {
-    let visible_count = 15;
+fn render_commits_panel(app: &App, area: Rect) -> impl Widget {
+    let panel_height = area.height.saturating_sub(2) as usize;
+    let visible_count = panel_height.max(1);
     let raw_lines = format_tree_lines(app.tree.nodes(), app.scroll_offset, visible_count);
 
     let lines: Vec<Line<'static>> = raw_lines
@@ -1503,7 +1506,8 @@ fn render_main_content(app: &App, area: Rect, frame: &mut ratatui::Frame) {
     .alignment(Alignment::Left);
     title.render(chunks[0], frame.buffer_mut());
 
-    let visible_count = 15;
+    let content_height = chunks[1].height.saturating_sub(2) as usize;
+    let visible_count = content_height.max(1);
     let raw_lines = format_tree_lines(app.tree.nodes(), app.scroll_offset, visible_count);
 
     let lines: Vec<Line<'static>> = raw_lines
@@ -1530,7 +1534,7 @@ fn render_main_content(app: &App, area: Rect, frame: &mut ratatui::Frame) {
     let commit_widget = Paragraph::new(lines).block(
         Block::default()
             .title(format!(
-                "Commits ({}/{}) - {} - ● main ○ branch",
+                "Commits ({}/{}) - {}",
                 app.selected_index + 1,
                 app.commits.len(),
                 app.current_branch
@@ -2377,11 +2381,11 @@ mod tests {
     fn test_theme_dark_colors() {
         let theme = Theme::dark();
         assert_eq!(theme.name, "dark");
-        assert_eq!(theme.title, Color::Cyan);
-        assert_eq!(theme.text, Color::Gray);
-        assert_eq!(theme.border, Color::White);
-        assert_eq!(theme.selected, Color::White);
-        assert_eq!(theme.selected_bg, Color::DarkGray);
+        assert_eq!(theme.title, Color::Rgb(0, 191, 255));
+        assert_eq!(theme.text, Color::Rgb(200, 200, 200));
+        assert_eq!(theme.border, Color::Rgb(255, 215, 0));
+        assert_eq!(theme.selected, Color::Rgb(255, 255, 255));
+        assert_eq!(theme.selected_bg, Color::Rgb(70, 70, 100));
     }
 
     #[test]

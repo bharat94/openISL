@@ -179,9 +179,9 @@ pub fn format_tree_node(node: &TreeNode, is_last: bool, _selected: bool) -> Stri
     }
 
     if node.is_main_branch {
-        line.push('●');
+        line.push_str(" ●");
     } else {
-        line.push('○');
+        line.push_str(" ○");
     }
     line.push(' ');
 
@@ -210,15 +210,45 @@ pub fn format_tree_node(node: &TreeNode, is_last: bool, _selected: bool) -> Stri
         .filter(|n| !n.is_empty())
         .collect();
 
+    let relative_time = format_relative_time(node.commit.date);
+
     let mut content = hash_part.to_string();
+    content.push_str(&format!(" - {}", node.commit.summary));
+    content.push_str(&format!(" ({})", relative_time));
+
     if !branch_names.is_empty() {
         content.push_str(&format!(" [{}]", branch_names.join(", ")));
     }
-    content.push_str(&format!(" - {}", node.commit.summary));
 
     line.push_str(&content);
 
     line
+}
+
+fn format_relative_time(date: chrono::DateTime<chrono::Utc>) -> String {
+    let now = chrono::Utc::now();
+    let duration = now.signed_duration_since(date);
+
+    let total_seconds = duration.num_seconds();
+    let total_minutes = duration.num_minutes();
+    let total_hours = duration.num_hours();
+    let total_days = duration.num_days();
+
+    if total_seconds < 60 {
+        "just now".to_string()
+    } else if total_minutes < 60 {
+        format!("{}m ago", total_minutes)
+    } else if total_hours < 24 {
+        format!("{}h ago", total_hours)
+    } else if total_days < 7 {
+        format!("{}d ago", total_days)
+    } else if total_days < 30 {
+        format!("{}w ago", total_days / 7)
+    } else if total_days < 365 {
+        format!("{}mo ago", total_days / 30)
+    } else {
+        format!("{}y ago", total_days / 365)
+    }
 }
 
 pub fn format_tree_lines(
