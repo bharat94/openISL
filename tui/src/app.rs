@@ -15,6 +15,7 @@ use openisl_git::{Commit, get_commit_diff};
 use crate::theme::Theme;
 use crate::keybindings::KeyBindings;
 use crate::tree::{CommitTree, format_tree_lines};
+use crate::diff::{DiffParser, DiffLineType, DiffStats};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ViewMode {
@@ -35,6 +36,7 @@ pub struct App {
     pub theme: Theme,
     pub view_mode: ViewMode,
     pub diff_content: String,
+    pub diff_stats: DiffStats,
     pub status_message: String,
     pub branch_input: String,
     pub repo_path: Option<std::path::PathBuf>,
@@ -56,6 +58,7 @@ impl App {
             theme: Theme::dark(),
             view_mode: ViewMode::List,
             diff_content: String::new(),
+            diff_stats: DiffStats::default(),
             status_message: String::new(),
             branch_input: String::new(),
             repo_path,
@@ -72,6 +75,15 @@ impl App {
         self.tree = CommitTree::new(self.commits.clone());
         self.selected_index = 0;
         self.scroll_offset = 0;
+    }
+
+    pub fn parse_diff(&mut self) {
+        if self.diff_content.is_empty() {
+            self.diff_stats = DiffStats::default();
+            return;
+        }
+        let lines = DiffParser::parse(&self.diff_content);
+        self.diff_stats = DiffParser::count_stats(&lines);
     }
 
     pub fn search(&mut self) {
@@ -378,11 +390,18 @@ impl App {
         if let Some(commit) = self.selected_commit() {
             if let Some(ref repo_path) = self.repo_path {
                 match get_commit_diff(repo_path, &commit.hash) {
-                    Ok(diff) => self.diff_content = diff,
-                    Err(e) => self.diff_content = format!("Error fetching diff: {}", e),
+                    Ok(diff) => {
+                        self.diff_content = diff;
+                        self.parse_diff();
+                    }
+                    Err(e) => {
+                        self.diff_content = format!("Error fetching diff: {}", e);
+                        self.parse_diff();
+                    }
                 }
             } else {
                 self.diff_content = "No repository path available".to_string();
+                self.parse_diff();
             }
         }
     }
@@ -567,6 +586,7 @@ fn render_diff_view(app: &App, frame: &mut ratatui::Frame) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(2),
+            Constraint::Length(3),
             Constraint::Min(10),
             Constraint::Length(2),
         ])
@@ -577,22 +597,38 @@ fn render_diff_view(app: &App, frame: &mut ratatui::Frame) {
         .alignment(Alignment::Center);
     title.render(chunks[0], frame.buffer_mut());
 
-    let diff_text = if app.diff_content.is_empty() {
-        "No diff available. Use 'openisl diff' command for staged/working changes."
+    let stats_text = if !app.diff_content.is_empty() {
+        app.diff_stats.format_summary()
     } else {
-        &app.diff_content
+        String::from("No diff available")
     };
 
-    let diff_widget = Paragraph::new(diff_text)
-        .style(Style::default().fg(app.theme.text))
+    let stats_widget = Paragraph::new(stats_text)
+        .style(Style::default().fg(app.theme.help))
+        .alignment(Alignment::Left);
+    stats_widget.render(chunks[1], frame.buffer_mut());
+
+    let dark_theme = app.theme.name == "dark";
+
+    let diff_widget = if app.diff_content.is_empty() {
+        Paragraph::new(vec![Line::from("No diff available. Use 'openisl diff' command for staged/working changes.")])
+            .style(Style::default().fg(app.theme.text))
+    } else {
+        let parsed_lines = DiffParser::parse(&app.diff_content);
+        let styled_lines = DiffParser::to_styled_lines(&parsed_lines, dark_theme);
+        Paragraph::new(styled_lines)
+            .style(Style::default().fg(app.theme.text))
+    };
+
+    diff_widget
         .block(
             Block::default()
                 .title("Diff View")
                 .borders(Borders::ALL)
                 .border_type(BorderType::Plain)
                 .style(Style::default().fg(app.theme.border)),
-        );
-    diff_widget.render(chunks[1], frame.buffer_mut());
+        )
+        .render(chunks[2], frame.buffer_mut());
 
     let help_text = format!(
         "{}/{}: Back | {}: Help | Theme: {}",
@@ -604,7 +640,7 @@ fn render_diff_view(app: &App, frame: &mut ratatui::Frame) {
     let help_widget = Paragraph::new(help_text)
         .style(Style::default().fg(app.theme.help))
         .alignment(Alignment::Center);
-    help_widget.render(chunks[2], frame.buffer_mut());
+    help_widget.render(chunks[3], frame.buffer_mut());
 }
 
 fn render_input_view(app: &App, frame: &mut ratatui::Frame) {
