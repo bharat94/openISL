@@ -5,8 +5,8 @@ use crate::tree::{format_tree_lines, CommitTree};
 use anyhow::Result;
 use crossterm::{
     event::{
-        self, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent,
-        MouseEventKind,
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers,
+        MouseButton, MouseEvent, MouseEventKind,
     },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode},
@@ -103,6 +103,7 @@ pub struct App {
     pub mouse_scroll_offset: usize,
     pub last_click_position: Option<(u16, u16)>,
     pub last_click_time: Option<std::time::Instant>,
+    pub mouse_enabled: bool,
 }
 
 impl App {
@@ -148,6 +149,7 @@ impl App {
             mouse_scroll_offset: 0,
             last_click_position: None,
             last_click_time: None,
+            mouse_enabled: false,
         };
         app.calculate_stats();
         app.populate_command_palette();
@@ -554,6 +556,12 @@ impl App {
                 keys: vec!["t".to_string()],
             },
             CommandAction {
+                name: "Toggle Mouse Mode".to_string(),
+                description: "Enable/disable mouse support".to_string(),
+                action: "toggle_mouse".to_string(),
+                keys: vec!["m".to_string()],
+            },
+            CommandAction {
                 name: "Show Help".to_string(),
                 description: "Display keyboard shortcuts".to_string(),
                 action: "help".to_string(),
@@ -660,6 +668,7 @@ impl App {
                 self.status_message = format!("Filter: {} commits", self.filtered_commits.len());
             }
             KeyCode::Char('t') => self.theme.next(),
+            KeyCode::Char('m') => self.toggle_mouse_mode(),
             KeyCode::Char(' ') => {
                 if self.active_panel == PanelType::Files {
                     self.toggle_file_stage();
@@ -790,6 +799,7 @@ impl App {
             "stage_all" => self.stage_all_files(),
             "unstage_all" => self.unstage_all_files(),
             "toggle_theme" => self.theme.next(),
+            "toggle_mouse" => self.toggle_mouse_mode(),
             "help" => self.view_mode = ViewMode::Help,
             "quit" => {}
             _ => {}
@@ -797,6 +807,9 @@ impl App {
     }
 
     pub fn handle_mouse(&mut self, event: MouseEvent) -> bool {
+        if !self.mouse_enabled {
+            return false;
+        }
         match event.kind {
             MouseEventKind::Down(btn) if btn == MouseButton::Left => {
                 self.handle_left_click(event);
@@ -1236,6 +1249,17 @@ impl App {
             }
         }
     }
+
+    pub fn toggle_mouse_mode(&mut self) {
+        self.mouse_enabled = !self.mouse_enabled;
+        if self.mouse_enabled {
+            let _ = execute!(stdout(), EnableMouseCapture);
+            self.status_message = "Mouse mode: ON (click and scroll enabled)".to_string();
+        } else {
+            let _ = execute!(stdout(), DisableMouseCapture);
+            self.status_message = "Mouse mode: OFF (use keyboard navigation)".to_string();
+        }
+    }
 }
 
 pub fn run_tui(
@@ -1246,7 +1270,6 @@ pub fn run_tui(
     let mut stdout = stdout();
 
     enable_raw_mode()?;
-    execute!(stdout, EnableMouseCapture)?;
 
     let backend = CrosstermBackend::new(&mut stdout);
     let mut terminal = Terminal::new(backend)?;
@@ -3069,6 +3092,7 @@ mod tests {
     fn test_mouse_click_sets_position() {
         let commits = create_test_commits();
         let mut app = App::new(commits, "main".to_string(), None);
+        app.mouse_enabled = true;
 
         let mouse_event = MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
@@ -3086,6 +3110,7 @@ mod tests {
     fn test_mouse_double_click_detection() {
         let commits = create_test_commits();
         let mut app = App::new(commits, "main".to_string(), None);
+        app.mouse_enabled = true;
 
         let mouse_event = MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
@@ -3199,5 +3224,35 @@ mod tests {
         app.repo_path = None;
         app.refresh_files();
         assert!(app.files.is_empty());
+    }
+
+    #[test]
+    fn test_mouse_toggle() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        assert!(!app.mouse_enabled);
+        app.toggle_mouse_mode();
+        assert!(app.mouse_enabled);
+        assert!(app.status_message.contains("ON"));
+        app.toggle_mouse_mode();
+        assert!(!app.mouse_enabled);
+        assert!(app.status_message.contains("OFF"));
+    }
+
+    #[test]
+    fn test_mouse_disabled_ignores_events() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        assert!(!app.mouse_enabled);
+        let mouse_event = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 10,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        };
+        app.handle_mouse(mouse_event);
+        assert_eq!(app.last_click_position, None);
     }
 }
