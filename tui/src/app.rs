@@ -1,21 +1,21 @@
+use crate::diff::{DiffParser, DiffStats};
+use crate::keybindings::KeyBindings;
+use crate::theme::Theme;
+use crate::tree::{format_tree_lines, CommitTree};
 use anyhow::Result;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEvent, KeyModifiers},
     terminal::{disable_raw_mode, enable_raw_mode},
 };
+use openisl_git::{get_commit_diff, Commit};
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout},
-    prelude::{Color, Modifier, Style, Line},
+    prelude::{Color, Line, Modifier, Style},
     widgets::{Block, BorderType, Borders, Paragraph, Widget},
     Terminal,
 };
 use std::io::stdout;
-use openisl_git::{Commit, get_commit_diff};
-use crate::theme::Theme;
-use crate::keybindings::KeyBindings;
-use crate::tree::{CommitTree, format_tree_lines};
-use crate::diff::{DiffParser, DiffStats};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ViewMode {
@@ -73,7 +73,11 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(commits: Vec<Commit>, current_branch: String, repo_path: Option<std::path::PathBuf>) -> Self {
+    pub fn new(
+        commits: Vec<Commit>,
+        current_branch: String,
+        repo_path: Option<std::path::PathBuf>,
+    ) -> Self {
         let mut app = Self {
             commits: commits.clone(),
             filtered_commits: commits.clone(),
@@ -127,7 +131,8 @@ impl App {
         let one_week = chrono::Duration::days(7);
         let one_month = chrono::Duration::days(30);
 
-        let mut author_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut author_counts: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
 
         for commit in &self.commits {
             *author_counts.entry(commit.author.clone()).or_insert(0) += 1;
@@ -161,14 +166,19 @@ impl App {
         self.is_filtering = true;
         let query = self.filter_input.to_lowercase();
 
-        self.filtered_commits = self.commits.iter().filter(|commit| {
-            match self.filter_mode {
+        self.filtered_commits = self
+            .commits
+            .iter()
+            .filter(|commit| match self.filter_mode {
                 FilterMode::Author => commit.author.to_lowercase().contains(&query),
-                FilterMode::Message => commit.summary.to_lowercase().contains(&query)
-                    || commit.message.to_lowercase().contains(&query),
+                FilterMode::Message => {
+                    commit.summary.to_lowercase().contains(&query)
+                        || commit.message.to_lowercase().contains(&query)
+                }
                 FilterMode::Date => commit.date.format("%Y-%m-%d").to_string().contains(&query),
-            }
-        }).cloned().collect();
+            })
+            .cloned()
+            .collect();
 
         self.selected_index = 0;
         self.scroll_offset = 0;
@@ -181,13 +191,21 @@ impl App {
     }
 
     pub fn visible_commits(&self) -> &[Commit] {
-        let commits = if self.is_filtering { &self.filtered_commits } else { &self.commits };
+        let commits = if self.is_filtering {
+            &self.filtered_commits
+        } else {
+            &self.commits
+        };
         let end = (self.scroll_offset + 20).min(commits.len());
         &commits[self.scroll_offset..end]
     }
 
     pub fn selected_commit(&self) -> Option<&Commit> {
-        let commits = if self.is_filtering { &self.filtered_commits } else { &self.commits };
+        let commits = if self.is_filtering {
+            &self.filtered_commits
+        } else {
+            &self.commits
+        };
         commits.get(self.selected_index)
     }
     pub fn search(&mut self) {
@@ -196,14 +214,16 @@ impl App {
             return;
         }
 
-        self.search_results = self.commits.iter()
+        self.search_results = self
+            .commits
+            .iter()
             .enumerate()
             .filter(|(_, commit)| {
                 let query = self.search_query.to_lowercase();
-                commit.summary.to_lowercase().contains(&query) ||
-                commit.message.to_lowercase().contains(&query) ||
-                commit.author.to_lowercase().contains(&query) ||
-                commit.short_hash.to_lowercase().contains(&query)
+                commit.summary.to_lowercase().contains(&query)
+                    || commit.message.to_lowercase().contains(&query)
+                    || commit.author.to_lowercase().contains(&query)
+                    || commit.short_hash.to_lowercase().contains(&query)
             })
             .map(|(i, _)| i)
             .collect();
@@ -219,7 +239,11 @@ impl App {
             return;
         }
 
-        if let Some(current_pos) = self.search_results.iter().position(|&i| i == self.selected_index) {
+        if let Some(current_pos) = self
+            .search_results
+            .iter()
+            .position(|&i| i == self.selected_index)
+        {
             if current_pos + 1 < self.search_results.len() {
                 self.selected_index = self.search_results[current_pos + 1];
                 if self.selected_index >= self.scroll_offset + 20 {
@@ -234,7 +258,11 @@ impl App {
             return;
         }
 
-        if let Some(current_pos) = self.search_results.iter().position(|&i| i == self.selected_index) {
+        if let Some(current_pos) = self
+            .search_results
+            .iter()
+            .position(|&i| i == self.selected_index)
+        {
             if current_pos > 0 {
                 self.selected_index = self.search_results[current_pos - 1];
                 if self.selected_index < self.scroll_offset {
@@ -296,13 +324,18 @@ impl App {
                 self.filter_input.clear();
                 self.filter_mode = FilterMode::Author;
                 self.view_mode = ViewMode::Filter;
-                self.status_message = "Filter by author (a), message (m), or date (d) - Esc to cancel".to_string();
+                self.status_message =
+                    "Filter by author (a), message (m), or date (d) - Esc to cancel".to_string();
             }
             KeyCode::Char('s') => {
                 self.view_mode = ViewMode::Stats;
             }
-            KeyCode::Char('n') if key.modifiers.contains(KeyModifiers::CONTROL) => self.next_search_result(),
-            KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => self.prev_search_result(),
+            KeyCode::Char('n') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.next_search_result()
+            }
+            KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.prev_search_result()
+            }
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 self.fetch_diff();
                 self.view_mode = ViewMode::Diff;
@@ -358,7 +391,13 @@ impl App {
                 self.status_message = "Filtering by date (YYYY-MM-DD)...".to_string();
             }
             KeyCode::Char(c) => {
-                if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ' ' || c == '.' || c == '@' {
+                if c.is_ascii_alphanumeric()
+                    || c == '-'
+                    || c == '_'
+                    || c == ' '
+                    || c == '.'
+                    || c == '@'
+                {
                     self.filter_input.push(c);
                 }
             }
@@ -393,8 +432,12 @@ impl App {
                 self.search_query.pop();
                 self.search();
             }
-            KeyCode::Char('n') if key.modifiers.contains(KeyModifiers::CONTROL) => self.next_search_result(),
-            KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => self.prev_search_result(),
+            KeyCode::Char('n') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.next_search_result()
+            }
+            KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.prev_search_result()
+            }
             KeyCode::Char(c) => {
                 if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ' ' || c == '.' {
                     self.search_query.push(c);
@@ -446,8 +489,7 @@ impl App {
                     if let Some(commit) = self.selected_commit() {
                         self.status_message = format!(
                             "Created branch '{}' from {}",
-                            self.branch_input,
-                            commit.short_hash
+                            self.branch_input, commit.short_hash
                         );
                     }
                 }
@@ -566,7 +608,11 @@ impl App {
     }
 }
 
-pub fn run_tui(commits: Vec<Commit>, current_branch: String, repo_path: Option<std::path::PathBuf>) -> Result<()> {
+pub fn run_tui(
+    commits: Vec<Commit>,
+    current_branch: String,
+    repo_path: Option<std::path::PathBuf>,
+) -> Result<()> {
     let mut stdout = stdout();
 
     enable_raw_mode()?;
@@ -579,17 +625,15 @@ pub fn run_tui(commits: Vec<Commit>, current_branch: String, repo_path: Option<s
     app.set_commits(commits);
 
     loop {
-        terminal.draw(|frame| {
-            match app.view_mode {
-                ViewMode::List => render_list_view(&app, frame),
-                ViewMode::Details => render_details_view(&app, frame),
-                ViewMode::Diff => render_diff_view(&app, frame),
-                ViewMode::Help => render_help_overlay(&app, frame),
-                ViewMode::InputBranch => render_input_view(&app, frame),
-                ViewMode::Search => render_search_view(&app, frame),
-                ViewMode::Filter => render_filter_view(&app, frame),
-                ViewMode::Stats => render_stats_view(&app, frame),
-            }
+        terminal.draw(|frame| match app.view_mode {
+            ViewMode::List => render_list_view(&app, frame),
+            ViewMode::Details => render_details_view(&app, frame),
+            ViewMode::Diff => render_diff_view(&app, frame),
+            ViewMode::Help => render_help_overlay(&app, frame),
+            ViewMode::InputBranch => render_input_view(&app, frame),
+            ViewMode::Search => render_search_view(&app, frame),
+            ViewMode::Filter => render_filter_view(&app, frame),
+            ViewMode::Stats => render_stats_view(&app, frame),
         })?;
 
         if event::poll(std::time::Duration::from_millis(50))? {
@@ -620,43 +664,49 @@ fn render_list_view(app: &App, frame: &mut ratatui::Frame) {
         .split(frame.size());
 
     let title = Paragraph::new("openisl log")
-        .style(Style::default().fg(app.theme.title).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(app.theme.title)
+                .add_modifier(Modifier::BOLD),
+        )
         .alignment(Alignment::Center);
     title.render(chunks[0], frame.buffer_mut());
 
     let visible_count = 20;
-    let raw_lines = format_tree_lines(
-        app.tree.nodes(),
-        app.scroll_offset,
-        visible_count,
+    let raw_lines = format_tree_lines(app.tree.nodes(), app.scroll_offset, visible_count);
+
+    let lines: Vec<Line> = raw_lines
+        .iter()
+        .enumerate()
+        .map(|(i, line)| {
+            let global_index = app.scroll_offset + i;
+            let is_selected = global_index == app.selected_index;
+
+            if is_selected {
+                Line::from(line.as_str()).style(
+                    Style::default()
+                        .fg(app.theme.selected)
+                        .add_modifier(Modifier::BOLD)
+                        .bg(app.theme.selected_bg),
+                )
+            } else {
+                Line::from(line.as_str()).style(Style::default().fg(app.theme.text))
+            }
+        })
+        .collect();
+
+    let commit_widget = Paragraph::new(lines).block(
+        Block::default()
+            .title(format!(
+                "Commits ({}/{}) - {} - ● main ○ branch",
+                app.selected_index + 1,
+                app.commits.len(),
+                app.current_branch
+            ))
+            .borders(Borders::ALL)
+            .border_type(BorderType::Plain)
+            .style(Style::default().fg(app.theme.border)),
     );
-
-    let lines: Vec<Line> = raw_lines.iter().enumerate().map(|(i, line)| {
-        let global_index = app.scroll_offset + i;
-        let is_selected = global_index == app.selected_index;
-
-        if is_selected {
-            Line::from(line.as_str())
-                .style(Style::default().fg(app.theme.selected).add_modifier(Modifier::BOLD).bg(app.theme.selected_bg))
-        } else {
-            Line::from(line.as_str())
-                .style(Style::default().fg(app.theme.text))
-        }
-    }).collect();
-
-    let commit_widget = Paragraph::new(lines)
-        .block(
-            Block::default()
-                .title(format!(
-                    "Commits ({}/{}) - {} - ● main ○ branch",
-                    app.selected_index + 1,
-                    app.commits.len(),
-                    app.current_branch
-                ))
-                .borders(Borders::ALL)
-                .border_type(BorderType::Plain)
-                .style(Style::default().fg(app.theme.border)),
-        );
     commit_widget.render(chunks[1], frame.buffer_mut());
 
     let status_text = if !app.status_message.is_empty() {
@@ -698,7 +748,11 @@ fn render_details_view(app: &App, frame: &mut ratatui::Frame) {
         .split(frame.size());
 
     let title = Paragraph::new("Commit Details")
-        .style(Style::default().fg(app.theme.title).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(app.theme.title)
+                .add_modifier(Modifier::BOLD),
+        )
         .alignment(Alignment::Center);
     title.render(chunks[0], frame.buffer_mut());
 
@@ -754,7 +808,11 @@ fn render_diff_view(app: &App, frame: &mut ratatui::Frame) {
         .split(frame.size());
 
     let title = Paragraph::new("Commit Diff")
-        .style(Style::default().fg(app.theme.title).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(app.theme.title)
+                .add_modifier(Modifier::BOLD),
+        )
         .alignment(Alignment::Center);
     title.render(chunks[0], frame.buffer_mut());
 
@@ -772,13 +830,14 @@ fn render_diff_view(app: &App, frame: &mut ratatui::Frame) {
     let dark_theme = app.theme.name == "dark";
 
     let diff_widget = if app.diff_content.is_empty() {
-        Paragraph::new(vec![Line::from("No diff available. Use 'openisl diff' command for staged/working changes.")])
-            .style(Style::default().fg(app.theme.text))
+        Paragraph::new(vec![Line::from(
+            "No diff available. Use 'openisl diff' command for staged/working changes.",
+        )])
+        .style(Style::default().fg(app.theme.text))
     } else {
         let parsed_lines = DiffParser::parse(&app.diff_content);
         let styled_lines = DiffParser::to_styled_lines(&parsed_lines, dark_theme);
-        Paragraph::new(styled_lines)
-            .style(Style::default().fg(app.theme.text))
+        Paragraph::new(styled_lines).style(Style::default().fg(app.theme.text))
     };
 
     diff_widget
@@ -816,7 +875,11 @@ fn render_input_view(app: &App, frame: &mut ratatui::Frame) {
         .split(frame.size());
 
     let title = Paragraph::new("Create Branch")
-        .style(Style::default().fg(app.theme.title).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(app.theme.title)
+                .add_modifier(Modifier::BOLD),
+        )
         .alignment(Alignment::Center);
     title.render(chunks[0], frame.buffer_mut());
 
@@ -836,8 +899,11 @@ fn render_input_view(app: &App, frame: &mut ratatui::Frame) {
     } else {
         "|"
     };
-    let input_display = Paragraph::new(format!("{} {}", app.branch_input, cursor))
-        .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD));
+    let input_display = Paragraph::new(format!("{} {}", app.branch_input, cursor)).style(
+        Style::default()
+            .fg(Color::Green)
+            .add_modifier(Modifier::BOLD),
+    );
     input_display.render(chunks[2], frame.buffer_mut());
 
     let help_text = format!(
@@ -864,14 +930,22 @@ fn render_search_view(app: &App, frame: &mut ratatui::Frame) {
         .split(frame.size());
 
     let title = Paragraph::new("Search Commits")
-        .style(Style::default().fg(app.theme.title).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(app.theme.title)
+                .add_modifier(Modifier::BOLD),
+        )
         .alignment(Alignment::Center);
     title.render(chunks[0], frame.buffer_mut());
 
     let search_info = if app.search_results.is_empty() && !app.search_query.is_empty() {
         format!("No matches found for '{}'", app.search_query)
     } else if !app.search_results.is_empty() {
-        format!("{} matches for '{}'", app.search_results.len(), app.search_query)
+        format!(
+            "{} matches for '{}'",
+            app.search_results.len(),
+            app.search_query
+        )
     } else {
         "Type to search commits (author, message, hash)".to_string()
     };
@@ -891,7 +965,10 @@ fn render_search_view(app: &App, frame: &mut ratatui::Frame) {
             let is_match = app.search_results.contains(&global_index);
             let prefix = if is_selected { ">" } else { " " };
             let match_indicator = if is_match { "*" } else { " " };
-            format!("{} {} {} - {}", prefix, match_indicator, commit.short_hash, commit.summary)
+            format!(
+                "{} {} {} - {}",
+                prefix, match_indicator, commit.short_hash, commit.summary
+            )
         })
         .collect();
 
@@ -932,7 +1009,11 @@ fn render_help_overlay(app: &App, frame: &mut ratatui::Frame) {
         .split(frame.size());
 
     let title = Paragraph::new("Keyboard Shortcuts")
-        .style(Style::default().fg(app.theme.title).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(app.theme.title)
+                .add_modifier(Modifier::BOLD),
+        )
         .alignment(Alignment::Center);
     title.render(chunks[0], frame.buffer_mut());
 
@@ -1009,7 +1090,11 @@ fn render_filter_view(app: &App, frame: &mut ratatui::Frame) {
         .split(frame.size());
 
     let title = Paragraph::new("Filter Commits")
-        .style(Style::default().fg(app.theme.title).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(app.theme.title)
+                .add_modifier(Modifier::BOLD),
+        )
         .alignment(Alignment::Center);
     title.render(chunks[0], frame.buffer_mut());
 
@@ -1022,16 +1107,27 @@ fn render_filter_view(app: &App, frame: &mut ratatui::Frame) {
     let filter_prompt = Paragraph::new(format!(
         "{}\n\nCurrent filter: {}\n\nFilter: {}\n\nPress Enter to apply, Esc to cancel",
         filter_info,
-        if app.filter_input.is_empty() { "(none)" } else { &app.filter_input },
+        if app.filter_input.is_empty() {
+            "(none)"
+        } else {
+            &app.filter_input
+        },
         app.filter_input
     ))
     .style(Style::default().fg(app.theme.text))
     .alignment(Alignment::Left);
     filter_prompt.render(chunks[1], frame.buffer_mut());
 
-    let cursor = if app.filter_input.is_empty() { "_" } else { "|" };
-    let input_display = Paragraph::new(format!("{} {}", app.filter_input, cursor))
-        .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD));
+    let cursor = if app.filter_input.is_empty() {
+        "_"
+    } else {
+        "|"
+    };
+    let input_display = Paragraph::new(format!("{} {}", app.filter_input, cursor)).style(
+        Style::default()
+            .fg(Color::Green)
+            .add_modifier(Modifier::BOLD),
+    );
     input_display.render(chunks[2], frame.buffer_mut());
 
     let help_text = format!(
@@ -1055,7 +1151,11 @@ fn render_stats_view(app: &App, frame: &mut ratatui::Frame) {
         .split(frame.size());
 
     let title = Paragraph::new("Repository Statistics")
-        .style(Style::default().fg(app.theme.title).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(app.theme.title)
+                .add_modifier(Modifier::BOLD),
+        )
         .alignment(Alignment::Center);
     title.render(chunks[0], frame.buffer_mut());
 
@@ -1074,7 +1174,8 @@ Authors:
 
 Top Contributors:
 "#,
-        app.repo_path.as_ref()
+        app.repo_path
+            .as_ref()
             .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
             .unwrap_or_else(|| "Unknown".to_string()),
         app.current_branch,
@@ -1118,7 +1219,6 @@ Top Contributors:
 mod tests {
     use super::*;
     use ratatui::style::Color;
-    use crate::tree::CommitTree;
 
     fn create_test_commits() -> Vec<Commit> {
         vec![
@@ -1626,7 +1726,10 @@ mod tests {
 
         app.selected_index = app.search_results[app.search_results.len() - 1];
         app.next_search_result();
-        assert_eq!(app.selected_index, app.search_results[app.search_results.len() - 1]);
+        assert_eq!(
+            app.selected_index,
+            app.search_results[app.search_results.len() - 1]
+        );
     }
 
     #[test]
@@ -1772,5 +1875,121 @@ mod tests {
         let app = App::new(commits, "main".to_string(), repo_path);
 
         assert_eq!(app.repo_path, Some(std::path::PathBuf::from("/test/repo")));
+    }
+
+    #[test]
+    fn test_filter_by_author() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.filter_mode = FilterMode::Author;
+        app.filter_input = "test@example.com".to_string();
+        app.apply_filter();
+
+        assert!(app.is_filtering);
+        assert_eq!(app.filtered_commits.len(), 2);
+    }
+
+    #[test]
+    fn test_filter_by_message() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.filter_mode = FilterMode::Message;
+        app.filter_input = "First".to_string();
+        app.apply_filter();
+
+        assert!(app.is_filtering);
+        assert_eq!(app.filtered_commits.len(), 1);
+        assert!(app.filtered_commits[0].summary.contains("First"));
+    }
+
+    #[test]
+    fn test_filter_by_date() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        app.filter_mode = FilterMode::Date;
+        app.filter_input = today;
+        app.apply_filter();
+
+        assert!(app.is_filtering);
+        assert_eq!(app.filtered_commits.len(), 3);
+    }
+
+    #[test]
+    fn test_filter_case_insensitive() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.filter_mode = FilterMode::Message;
+        app.filter_input = "FIRST".to_string();
+        app.apply_filter();
+
+        assert_eq!(app.filtered_commits.len(), 1);
+    }
+
+    #[test]
+    fn test_clear_filter() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.filter_input = "test".to_string();
+        app.apply_filter();
+        assert!(app.is_filtering);
+
+        app.clear_filter();
+        assert!(!app.is_filtering);
+        assert!(app.filter_input.is_empty());
+        assert_eq!(app.filtered_commits.len(), app.commits.len());
+    }
+
+    #[test]
+    fn test_empty_filter_shows_all() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.filter_input = "nonexistent".to_string();
+        app.apply_filter();
+        assert_eq!(app.filtered_commits.len(), 0);
+
+        app.filter_input = "".to_string();
+        app.apply_filter();
+        assert!(!app.is_filtering);
+        assert_eq!(app.filtered_commits.len(), 3);
+    }
+
+    #[test]
+    fn test_stats_calculated_on_init() {
+        let commits = create_test_commits();
+        let app = App::new(commits, "main".to_string(), None);
+
+        assert_eq!(app.stats.total_commits, 3);
+        assert_eq!(app.stats.total_authors, 2);
+        assert!(app.stats.commits_today > 0);
+    }
+
+    #[test]
+    fn test_stats_commits_by_author() {
+        let commits = create_test_commits();
+        let app = App::new(commits, "main".to_string(), None);
+
+        let author_counts: Vec<(String, usize)> = app.stats.commits_by_author.clone();
+        assert_eq!(author_counts.len(), 2);
+
+        for (author, count) in author_counts {
+            if author.contains("test@example.com") {
+                assert_eq!(count, 2);
+            } else if author.contains("other@example.com") {
+                assert_eq!(count, 1);
+            }
+        }
+    }
+
+    #[test]
+    fn test_view_mode_filter_and_stats() {
+        assert_eq!(ViewMode::Filter as u8, 6);
+        assert_eq!(ViewMode::Stats as u8, 7);
     }
 }
