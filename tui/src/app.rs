@@ -506,6 +506,24 @@ impl App {
                 keys: vec!["j".to_string(), "↓".to_string()],
             },
             CommandAction {
+                name: "Stage/Unstage File".to_string(),
+                description: "Stage or unstage the selected file".to_string(),
+                action: "toggle_stage".to_string(),
+                keys: vec!["Space".to_string()],
+            },
+            CommandAction {
+                name: "Stage All".to_string(),
+                description: "Stage all files".to_string(),
+                action: "stage_all".to_string(),
+                keys: vec!["Ctrl+S".to_string()],
+            },
+            CommandAction {
+                name: "Unstage All".to_string(),
+                description: "Unstage all files".to_string(),
+                action: "unstage_all".to_string(),
+                keys: vec!["Ctrl+U".to_string()],
+            },
+            CommandAction {
                 name: "Go to Start".to_string(),
                 description: "Jump to first item".to_string(),
                 action: "go_to_start".to_string(),
@@ -546,6 +564,12 @@ impl App {
                 description: "Exit openisl".to_string(),
                 action: "quit".to_string(),
                 keys: vec!["q".to_string(), "Esc".to_string()],
+            },
+            CommandAction {
+                name: "Command Palette".to_string(),
+                description: "Open command search".to_string(),
+                action: "command_palette".to_string(),
+                keys: vec!["Ctrl+P".to_string()],
             },
         ]
     }
@@ -636,6 +660,19 @@ impl App {
                 self.status_message = format!("Filter: {} commits", self.filtered_commits.len());
             }
             KeyCode::Char('t') => self.theme.next(),
+            KeyCode::Char(' ') => {
+                if self.active_panel == PanelType::Files {
+                    self.toggle_file_stage();
+                } else {
+                    self.move_down();
+                }
+            }
+            KeyCode::Char('S') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.stage_all_files();
+            }
+            KeyCode::Char('U') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.unstage_all_files();
+            }
             _ => {}
         }
         false
@@ -749,6 +786,9 @@ impl App {
                 self.is_searching = true;
                 self.search_query.clear();
             }
+            "toggle_stage" => self.toggle_file_stage(),
+            "stage_all" => self.stage_all_files(),
+            "unstage_all" => self.unstage_all_files(),
             "toggle_theme" => self.theme.next(),
             "help" => self.view_mode = ViewMode::Help,
             "quit" => {}
@@ -1050,6 +1090,149 @@ impl App {
             } else {
                 self.diff_content = "No repository path available".to_string();
                 self.parse_diff();
+            }
+        }
+    }
+
+    pub fn refresh_files(&mut self) {
+        if let Some(ref repo_path) = self.repo_path {
+            match openisl_git::get_status(repo_path) {
+                Ok(files) => {
+                    self.files = files;
+                }
+                Err(e) => {
+                    self.status_message = format!("Error loading files: {}", e);
+                }
+            }
+        }
+    }
+
+    pub fn stage_selected_file(&mut self) {
+        if self.active_panel != PanelType::Files {
+            return;
+        }
+
+        if self.files.is_empty() {
+            self.status_message = "No files to stage".to_string();
+            return;
+        }
+
+        if let Some(file) = self.files.get(self.selected_file_index) {
+            if let Some(ref repo_path) = self.repo_path {
+                match openisl_git::stage_file(repo_path, &file.path) {
+                    Ok(_) => {
+                        self.status_message = format!("Staged: {}", file.path);
+                        self.refresh_files();
+                    }
+                    Err(e) => {
+                        self.status_message = format!("Error staging file: {}", e);
+                    }
+                }
+            } else {
+                self.status_message = "No repository path available".to_string();
+            }
+        }
+    }
+
+    pub fn unstage_selected_file(&mut self) {
+        if self.active_panel != PanelType::Files {
+            return;
+        }
+
+        if self.files.is_empty() {
+            self.status_message = "No files to unstage".to_string();
+            return;
+        }
+
+        if let Some(file) = self.files.get(self.selected_file_index) {
+            if let Some(ref repo_path) = self.repo_path {
+                match openisl_git::unstage_file(repo_path, &file.path) {
+                    Ok(_) => {
+                        self.status_message = format!("Unstaged: {}", file.path);
+                        self.refresh_files();
+                    }
+                    Err(e) => {
+                        self.status_message = format!("Error unstaging file: {}", e);
+                    }
+                }
+            } else {
+                self.status_message = "No repository path available".to_string();
+            }
+        }
+    }
+
+    pub fn toggle_file_stage(&mut self) {
+        if self.active_panel != PanelType::Files {
+            return;
+        }
+
+        if self.files.is_empty() {
+            self.status_message = "No files".to_string();
+            return;
+        }
+
+        if let Some(file) = self.files.get(self.selected_file_index) {
+            let is_staged = matches!(
+                file.status,
+                openisl_git::StatusType::ModifiedStaged
+                    | openisl_git::StatusType::AddedStaged
+                    | openisl_git::StatusType::DeletedStaged
+            );
+
+            if is_staged {
+                self.unstage_selected_file();
+            } else {
+                self.stage_selected_file();
+            }
+        }
+    }
+
+    pub fn stage_all_files(&mut self) {
+        if let Some(ref repo_path) = self.repo_path {
+            match openisl_git::stage_all(repo_path) {
+                Ok(_) => {
+                    self.status_message = "Staged all files".to_string();
+                    self.refresh_files();
+                }
+                Err(e) => {
+                    self.status_message = format!("Error staging all files: {}", e);
+                }
+            }
+        } else {
+            self.status_message = "No repository path available".to_string();
+        }
+    }
+
+    pub fn unstage_all_files(&mut self) {
+        if let Some(ref repo_path) = self.repo_path {
+            match openisl_git::unstage_all(repo_path) {
+                Ok(_) => {
+                    self.status_message = "Unstaged all files".to_string();
+                    self.refresh_files();
+                }
+                Err(e) => {
+                    self.status_message = format!("Error unstaging all files: {}", e);
+                }
+            }
+        } else {
+            self.status_message = "No repository path available".to_string();
+        }
+    }
+
+    pub fn move_file_selection_down(&mut self) {
+        if self.selected_file_index < self.files.len().saturating_sub(1) {
+            self.selected_file_index += 1;
+            if self.selected_file_index >= self.file_scroll_offset + 10 {
+                self.file_scroll_offset = self.selected_file_index - 10 + 1;
+            }
+        }
+    }
+
+    pub fn move_file_selection_up(&mut self) {
+        if self.selected_file_index > 0 {
+            self.selected_file_index = self.selected_file_index.saturating_sub(1);
+            if self.selected_file_index < self.file_scroll_offset {
+                self.file_scroll_offset = self.selected_file_index.saturating_sub(1);
             }
         }
     }
@@ -2916,5 +3099,105 @@ mod tests {
 
         app.handle_mouse(mouse_event);
         assert_eq!(app.view_mode, ViewMode::Details);
+    }
+
+    #[test]
+    fn test_toggle_file_stage_with_wrong_panel() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.active_panel = PanelType::Commits;
+        app.toggle_file_stage();
+        assert_eq!(app.status_message, "");
+    }
+
+    #[test]
+    fn test_stage_all_files() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.repo_path = None;
+        app.stage_all_files();
+        assert_eq!(app.status_message, "No repository path available");
+    }
+
+    #[test]
+    fn test_unstage_all_files() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.repo_path = None;
+        app.unstage_all_files();
+        assert_eq!(app.status_message, "No repository path available");
+    }
+
+    #[test]
+    fn test_file_selection_navigation() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.files = vec![
+            FileStatus {
+                path: "file1.rs".to_string(),
+                status: openisl_git::StatusType::Modified,
+            },
+            FileStatus {
+                path: "file2.rs".to_string(),
+                status: openisl_git::StatusType::Added,
+            },
+            FileStatus {
+                path: "file3.rs".to_string(),
+                status: openisl_git::StatusType::Untracked,
+            },
+        ];
+
+        assert_eq!(app.selected_file_index, 0);
+        app.move_file_selection_down();
+        assert_eq!(app.selected_file_index, 1);
+        app.move_file_selection_down();
+        assert_eq!(app.selected_file_index, 2);
+        app.move_file_selection_down();
+        assert_eq!(app.selected_file_index, 2);
+        app.move_file_selection_up();
+        assert_eq!(app.selected_file_index, 1);
+        app.move_file_selection_up();
+        assert_eq!(app.selected_file_index, 0);
+        app.move_file_selection_up();
+        assert_eq!(app.selected_file_index, 0);
+    }
+
+    #[test]
+    fn test_staging_command_in_palette() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.command_palette_input = "stage".to_string();
+        app.filter_command_palette();
+
+        assert!(!app.command_palette_results.is_empty());
+        assert!(app
+            .command_palette_results
+            .iter()
+            .any(|r| r.name.contains("Stage")));
+    }
+
+    #[test]
+    fn test_execute_stage_command() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.repo_path = None;
+        app.execute_command("stage_all");
+        assert_eq!(app.status_message, "No repository path available");
+    }
+
+    #[test]
+    fn test_refresh_files() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.repo_path = None;
+        app.refresh_files();
+        assert!(app.files.is_empty());
     }
 }

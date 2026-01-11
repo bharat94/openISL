@@ -4,6 +4,7 @@ pub mod diff;
 pub mod log;
 pub mod remote;
 pub mod smart_log;
+pub mod stage;
 pub mod stash;
 pub mod status;
 pub mod tag;
@@ -14,6 +15,10 @@ pub use diff::{get_commit_diff, get_diff};
 pub use log::get_commits;
 pub use remote::{fetch, pull, push, remote_add, remote_list, remote_remove, Remote};
 pub use smart_log::SmartLogFormatter;
+pub use stage::{
+    get_staged_files, get_unstaged_files, has_staged_changes, has_unstaged_changes, stage_all,
+    stage_file, stage_hunk, unstage_all, unstage_file,
+};
 pub use stash::{
     get_stash_list, stash_apply, stash_drop, stash_pop, stash_push, stash_show, StashEntry,
 };
