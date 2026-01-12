@@ -7,6 +7,19 @@ pub struct TreeNode {
     pub children: Vec<TreeNode>,
     pub is_main_branch: bool,
     pub branch_lanes: Vec<BranchLane>,
+    pub lane_index: usize,
+    pub commit_type: CommitType,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommitType {
+    Initial,
+    Branch,
+    Merge,
+    Tag,
+    Revert,
+    Squash,
+    Regular,
 }
 
 #[derive(Debug, Clone)]
@@ -14,6 +27,8 @@ pub struct BranchLane {
     pub is_continuing: bool,
     pub is_branch_point: bool,
     pub is_merge: bool,
+    pub is_active: bool,
+    pub lane_color: Option<usize>,
 }
 
 pub struct CommitTree {
@@ -66,11 +81,41 @@ impl CommitTree {
                 &mut processed,
                 &mut Vec::new(),
                 0,
+                0,
             );
         }
 
         self.nodes.sort_by_key(|n| n.commit.date);
         self.nodes.reverse();
+    }
+
+    fn detect_commit_type(
+        commit: &Commit,
+        children: &[String],
+        parents: &[String],
+        is_merge: bool,
+    ) -> CommitType {
+        let summary_lower = commit.summary.to_lowercase();
+
+        if commit
+            .refs
+            .iter()
+            .any(|r| r.ref_type == openisl_git::RefType::Tag)
+        {
+            CommitType::Tag
+        } else if summary_lower.starts_with("merge") || is_merge {
+            CommitType::Merge
+        } else if summary_lower.starts_with("revert ") || summary_lower.starts_with("revert:") {
+            CommitType::Revert
+        } else if summary_lower.starts_with("squash ") {
+            CommitType::Squash
+        } else if parents.is_empty() {
+            CommitType::Initial
+        } else if children.len() > 1 {
+            CommitType::Branch
+        } else {
+            CommitType::Regular
+        }
     }
 
     fn build_branch<'a>(
@@ -81,6 +126,7 @@ impl CommitTree {
         processed: &mut HashSet<String>,
         lanes: &mut [bool],
         depth: usize,
+        lane_index: usize,
     ) {
         if processed.contains(&commit.hash) {
             return;
@@ -95,18 +141,20 @@ impl CommitTree {
         let children_hashes = parent_map.get(&commit.hash).cloned().unwrap_or_default();
         let is_merge = children_hashes.len() > 1 || commit.parent_hashes.len() > 1;
 
-        let mut branch_lanes: Vec<BranchLane> = lanes
+        let commit_type =
+            Self::detect_commit_type(commit, &children_hashes, &commit.parent_hashes, is_merge);
+
+        let branch_lanes: Vec<BranchLane> = lanes
             .iter()
-            .map(|&is_continuing| BranchLane {
+            .enumerate()
+            .map(|(idx, &is_continuing)| BranchLane {
                 is_continuing,
-                is_branch_point: false,
-                is_merge: false,
+                is_branch_point: idx == lane_index && children_hashes.len() > 1,
+                is_merge: is_merge && idx == lane_index,
+                is_active: idx == lane_index,
+                lane_color: Some(idx % 8),
             })
             .collect();
-
-        if is_merge && !branch_lanes.is_empty() {
-            branch_lanes.last_mut().unwrap().is_merge = true;
-        }
 
         self.max_depth = self.max_depth.max(depth);
 
@@ -115,6 +163,8 @@ impl CommitTree {
             children: Vec::new(),
             is_main_branch: is_main,
             branch_lanes,
+            lane_index,
+            commit_type,
         };
 
         self.nodes.push(node);
@@ -123,12 +173,17 @@ impl CommitTree {
             for (i, child_hash) in children_hashes.iter().enumerate() {
                 if let Some(child_commit) = commit_map.get(child_hash) {
                     let mut new_lanes = lanes.to_owned();
-                    if i == children_hashes.len() - 1 {
-                        if !new_lanes.is_empty() {
-                            new_lanes.pop();
+                    let child_lane_index = if i == 0 { lane_index } else { depth + i };
+
+                    if i == 0 {
+                        if !new_lanes.is_empty() && lane_index < new_lanes.len() {
+                            new_lanes[lane_index] = true;
                         }
                     } else {
-                        new_lanes.push(true);
+                        while new_lanes.len() <= child_lane_index {
+                            new_lanes.push(false);
+                        }
+                        new_lanes[child_lane_index] = true;
                     }
 
                     self.build_branch(
@@ -138,6 +193,7 @@ impl CommitTree {
                         processed,
                         &mut new_lanes,
                         depth + 1,
+                        child_lane_index,
                     );
                 }
             }
@@ -153,36 +209,49 @@ impl CommitTree {
     }
 }
 
-pub fn format_tree_node(node: &TreeNode, is_last: bool, _selected: bool) -> String {
+pub fn format_tree_node(node: &TreeNode, _is_last: bool, selected: bool) -> String {
     let mut line = String::new();
 
-    for lane in &node.branch_lanes {
+    for (idx, lane) in node.branch_lanes.iter().enumerate() {
         if lane.is_continuing {
             if lane.is_merge {
                 line.push('┤');
-            } else {
+            } else if lane.is_active {
                 line.push('│');
+            } else {
+                line.push(' ');
             }
+        } else if lane.is_branch_point && idx == node.lane_index {
+            line.push('┬');
         } else {
             line.push(' ');
         }
     }
 
-    if node.branch_lanes.is_empty() && is_last {
-        line.push('└');
-    } else if node.branch_lanes.is_empty() {
-        line.push('├');
-    } else if is_last {
-        line.push('└');
+    if selected {
+        line.push_str(" >");
     } else {
-        line.push('├');
+        line.push(' ');
     }
 
-    if node.is_main_branch {
-        line.push_str(" ●");
-    } else {
-        line.push_str(" ○");
-    }
+    let commit_symbol = match node.commit_type {
+        CommitType::Initial if node.is_main_branch => "┌●",
+        CommitType::Initial => "┌○",
+        CommitType::Merge if node.is_main_branch => "┼●",
+        CommitType::Merge => "┼○",
+        CommitType::Tag if node.is_main_branch => "◆●",
+        CommitType::Tag => "◆○",
+        CommitType::Revert if node.is_main_branch => "↩●",
+        CommitType::Revert => "↩○",
+        CommitType::Squash if node.is_main_branch => "≡●",
+        CommitType::Squash => "≡○",
+        CommitType::Branch if node.is_main_branch => "┬●",
+        CommitType::Branch => "┬○",
+        CommitType::Regular if node.is_main_branch => "─●",
+        CommitType::Regular => "─○",
+    };
+
+    line.push_str(commit_symbol);
     line.push(' ');
 
     let hash_part = if node.is_main_branch {
@@ -210,6 +279,21 @@ pub fn format_tree_node(node: &TreeNode, is_last: bool, _selected: bool) -> Stri
         .filter(|n| !n.is_empty())
         .collect();
 
+    let tags: Vec<String> = node
+        .commit
+        .refs
+        .iter()
+        .filter(|r| r.ref_type == openisl_git::RefType::Tag)
+        .map(|r| {
+            let name = if r.name.starts_with("refs/tags/") {
+                &r.name[10..]
+            } else {
+                &r.name
+            };
+            name.to_string()
+        })
+        .collect();
+
     let relative_time = format_relative_time(node.commit.date);
 
     let mut content = hash_part.to_string();
@@ -218,6 +302,10 @@ pub fn format_tree_node(node: &TreeNode, is_last: bool, _selected: bool) -> Stri
 
     if !branch_names.is_empty() {
         content.push_str(&format!(" [{}]", branch_names.join(", ")));
+    }
+
+    if !tags.is_empty() {
+        content.push_str(&format!(" (tags: {})", tags.join(", ")));
     }
 
     line.push_str(&content);
@@ -275,9 +363,10 @@ mod tests {
     use chrono::Utc;
 
     fn create_test_commit(hash: &str, summary: &str, parents: Vec<&str>) -> Commit {
+        let short_len = hash.len().min(7);
         Commit {
             hash: hash.to_string(),
-            short_hash: hash[..7].to_string(),
+            short_hash: hash[..short_len].to_string(),
             message: summary.to_string(),
             summary: summary.to_string(),
             author: "Test".to_string(),
@@ -477,5 +566,113 @@ mod tests {
         let node = &tree.nodes()[0];
         let line = format_tree_node(node, true, false);
         assert!(line.contains("main"));
+    }
+
+    #[test]
+    fn test_commit_type_initial() {
+        let commits = vec![create_test_commit("abc123def456789", "Initial", vec![])];
+        let tree = CommitTree::new(commits);
+        let node = &tree.nodes()[0];
+        assert_eq!(node.commit_type, CommitType::Initial);
+    }
+
+    #[test]
+    fn test_commit_type_merge() {
+        let commits = vec![create_test_commit(
+            "merge123",
+            "Merge branch 'feature'",
+            vec!["parent1", "parent2"],
+        )];
+        let tree = CommitTree::new(commits);
+        let node = &tree.nodes()[0];
+        assert_eq!(node.commit_type, CommitType::Merge);
+    }
+
+    #[test]
+    fn test_commit_type_revert() {
+        let commits = vec![create_test_commit(
+            "revert123",
+            "Revert: Bad commit",
+            vec!["parent1"],
+        )];
+        let tree = CommitTree::new(commits);
+        let node = &tree.nodes()[0];
+        assert_eq!(node.commit_type, CommitType::Revert);
+    }
+
+    #[test]
+    fn test_commit_type_squash() {
+        let commits = vec![create_test_commit(
+            "squash123",
+            "Squash changes",
+            vec!["parent1"],
+        )];
+        let tree = CommitTree::new(commits);
+        let node = &tree.nodes()[0];
+        assert_eq!(node.commit_type, CommitType::Squash);
+    }
+
+    #[test]
+    fn test_commit_type_tag() {
+        use openisl_git::{GitRef, RefType};
+        let mut commit = create_test_commit("tag123", "Tagged commit", vec![]);
+        commit.refs = vec![GitRef {
+            name: "refs/tags/v1.0.0".to_string(),
+            ref_type: RefType::Tag,
+        }];
+        let tree = CommitTree::new(vec![commit]);
+        let node = &tree.nodes()[0];
+        assert_eq!(node.commit_type, CommitType::Tag);
+    }
+
+    #[test]
+    fn test_format_tree_node_with_tags() {
+        use openisl_git::{GitRef, RefType};
+        let mut commit = create_test_commit("abc123def456789", "Test commit", vec![]);
+        commit.refs = vec![GitRef {
+            name: "refs/tags/v1.0.0".to_string(),
+            ref_type: RefType::Tag,
+        }];
+        let tree = CommitTree::new(vec![commit]);
+        let node = &tree.nodes()[0];
+        let line = format_tree_node(node, true, false);
+        assert!(line.contains("tags"));
+        assert!(line.contains("v1.0.0"));
+    }
+
+    #[test]
+    fn test_format_tree_node_selected() {
+        let commits = vec![create_test_commit("abc123def456789", "Test commit", vec![])];
+        let tree = CommitTree::new(commits);
+        let node = &tree.nodes()[0];
+        let line = format_tree_node(node, false, true);
+        assert!(line.contains('>'));
+    }
+
+    #[test]
+    fn test_lane_index_assigned() {
+        let commits = vec![
+            create_test_commit("c123456789abcde", "Third", vec!["b123456789abcde"]),
+            create_test_commit("b123456789abcde", "Second", vec!["a123456789abcde"]),
+            create_test_commit("a123456789abcde", "First", vec![]),
+        ];
+        let tree = CommitTree::new(commits);
+        let nodes = tree.nodes();
+        assert!(!nodes.is_empty());
+        for node in nodes {
+            assert!(node.lane_index < 10);
+        }
+    }
+
+    #[test]
+    fn test_branch_lane_colors() {
+        let commits = vec![create_test_commit("abc123def456789", "Test", vec![])];
+        let tree = CommitTree::new(commits);
+        let node = &tree.nodes()[0];
+        for lane in &node.branch_lanes {
+            if lane.is_active {
+                assert!(lane.lane_color.is_some());
+            }
+        }
     }
 }
