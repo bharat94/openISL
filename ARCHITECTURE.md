@@ -8,20 +8,47 @@ This document provides an overview of the openISL system architecture, its compo
 
 | Field | Value |
 |--------|-------|
-| Status | Draft |
+| Status | Active |
 | Author | openISL Maintainers |
-| Version | 0.1.0 |
-| Last Updated | 2026-01-09 |
+| Version | 0.6.0 |
+| Last Updated | 2026-01-11 |
 
 ## System Overview
 
 openISL (Interactive Smart Log) is an intelligent command-line tool that provides:
-1. **Smart Stack Analysis**: Analyzes git repositories to identify technology stack, relationships, patterns, and insights
-2. **Intelligent Git Interface**: Provides unified interface for git operations with context-aware suggestions
-3. **Adaptive TUI**: Progressive terminal UI that adapts to user expertise and workflow
+1. **Advanced Git Visualization**: Interactive TUI with enhanced commit graphs and syntax-highlighted diffs
+2. **Git Command Wrapper**: Unified interface for common git operations with enhanced features
+3. **Adaptive TUI**: Progressive terminal UI with multiple themes and keyboard-driven navigation
 
 ### High-Level Architecture
 
+```
+┌─────────────────────────────────────────────────────────┐
+│                   User Interface Layer                 │
+│  ┌────────────────────────────────────────────┐     │
+│  │         CLI & Interactive TUI          │     │
+│  └────────────────────┬───────────────────┘     │
+│                       │                              │
+└───────────────────────┼───────────────────────────┘
+                          │
+┌───────────────────────┴───────────────────────────┐
+│                 Application Layer               │
+│  ┌────────────────────────────────────────────┐     │
+│  │ Command Dispatcher & TUI Engine       │     │
+│  └───────────┬───────────────────────────┘     │
+│                │                                   │
+└────────────────┼───────────────────────────────────┘
+                   │
+┌────────────────┴───────────────────────────────────┐
+│               Core Modules Layer                │
+│  ┌──────────┬──────────┬──────────┬────────┐│
+│  │  Diff     │  Commit  │ Git     │ Config ││
+│  │ Parser    │  Tree    │ Wrapper │ Manager ││
+│  │ w/        │          │         │        ││
+│  │  Syntax    │          │         │        ││
+│  │ Highlight │          │         │        ││
+│  └──────────┴──────────┴──────────┴────────┘│
+└──────────────────────────────────────────────────────┘
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                   User Interface Layer                 │
@@ -51,67 +78,111 @@ openISL (Interactive Smart Log) is an intelligent command-line tool that provide
 
 ## Core Components
 
-### 1. Smart Stack Analysis Module
+### 1. Syntax-Highlighted Diff Module
 
-**Purpose**: Analyze repository and identify technologies, relationships, patterns, and insights
+**Purpose**: Parse and display git diffs with language-aware syntax highlighting
 
 **Responsibilities**:
-- Scan repository files (package.json, Cargo.toml, go.mod, etc.)
-- Parse dependency files and detect relationships
-- Detect languages, frameworks, databases, tools
-- Build technology tree/graph with relationship mapping
-- Generate stack summary with insights (best practices, anti-patterns, security concerns)
-- Analyze code patterns and usage statistics
+- Parse unified diff format
+- Detect programming language from file extension (30+ languages)
+- Highlight keywords, types, strings, comments, numbers
+- Apply theme-aware colors for dark/light themes
+- Provide diff statistics (additions, deletions, files changed)
 
 **Key Design Decisions**:
-- **Parser-based architecture**: Separate parser for each ecosystem (Node, Rust, Python, etc.)
-- **Intelligence layer**: Pattern recognition and context-aware analysis
-- **Extensibility**: New ecosystem support via plugin system (future)
-- **Caching**: Cache intelligent analysis results for performance
+- **Tokenizer-based**: Custom tokenizer for lightweight syntax highlighting
+- **Language dictionaries**: Separate keyword/type lists per language
+- **Theme support**: Two color palettes (dark/light)
+- **Performance**: Fast tokenization without external dependencies
+
+**Supported Languages**:
+Rust, Python, JavaScript/TypeScript, Go, Java, C/C++, C#, Swift, Kotlin, Ruby, PHP, Lua, Perl, Elixir, Erlang, Clojure, Haskell, OCaml, F#, Nim, V, Zig, HTML, CSS, SCSS, JSON, YAML, XML, Bash, TOML, Markdown, SQL, R
 
 **Data Flow**:
 ```
-Repository File System
-         ↓
-    File Parser (ecosystem-specific)
-         ↓
-    Dependency Extractor + Relationship Analyzer
-         ↓
-    Technology Classifier + Pattern Detector
-         ↓
-    Smart Stack Analysis (relationships, insights, best practices)
-         ↓
-    Stack Model (JSON/Tree with intelligence)
+Git Diff Output
+     ↓
+Diff Parser (unified format)
+     ↓
+Language Detector (file extension)
+     ↓
+Syntax Highlighter (tokenizer)
+     ↓
+Themed Output (dark/light)
+     ↓
+TUI Display
 ```
 
-### 2. Smart Git Abstraction Module
+### 2. Commit Tree Module
+
+**Purpose**: Build and visualize git commit history with enhanced graph representation
+
+**Responsibilities**:
+- Parse commit graph with parent-child relationships
+- Detect commit type (Initial, Merge, Tag, Revert, Squash, Branch, Regular)
+- Track branch lanes and assign colors
+- Generate visual commit tree with ASCII/Unicode symbols
+- Format commit details with time, author, branch info
+
+**Key Design Decisions**:
+- **Commit type classification**: Analyze commit message and structure
+- **Lane-based visualization**: Track branch lanes for merge visualization
+- **Distinct symbols**: Unicode characters for different commit types
+- **Color assignment**: 8 distinct lane colors for better visualization
+
+**Commit Types**:
+- Initial (┌●): First commit with no parents
+- Merge (┼●): Merge commit with multiple parents
+- Tag (◆●): Commit with tag reference
+- Revert (↩●): Commit that reverts a previous commit
+- Squash (≡●): Squash commit
+- Branch (┬●): Branch point with multiple children
+- Regular (─●): Normal commit
+
+**Data Flow**:
+```
+Git Log Output
+     ↓
+Commit Parser (parent relationships)
+     ↓
+Commit Type Detector (message/structure)
+     ↓
+Tree Builder (lane assignment)
+     ↓
+Graph Renderer (symbols + colors)
+     ↓
+TUI Display
+```
+
+### 3. Smart Git Abstraction Module
 
 **Purpose**: Provide intelligent, user-friendly commands with context-aware suggestions for git operations
 
 **Responsibilities**:
 - Detect git repositories and find repo root from any subdirectory
 - Parse openISL commands
-- Map to git subcommands with smart enhancements
-- Execute git operations safely with intelligence
+- Map to git subcommands with safe execution
 - Provide helpful error messages with actionable suggestions
-- Handle edge cases with smart resolution guidance
-- Detect and prevent common mistakes
-- Suggest optimal workflows based on context
+- Execute git operations (log, branch, checkout, status, diff, remote, tag, stash)
+- Handle commit operations (amend, drop, squash, cherry-pick, revert)
+- Handle file operations (stage, unstage, stash)
 
 **Key Design Decisions**:
-- **Smart command mapping**: Enhanced mapping with intelligence (`openisl save` → `git commit` + auto-staging + suggestions)
-- **Context-aware suggestions**: Suggest commands and workflows based on project state
-- **Validation**: Validate operations before execution
-- **Dry-run mode**: Preview changes without executing
-- **Safety checks**: Confirm destructive operations, detect conflicts early
+- **Safe execution**: Validate operations before execution
+- **Dry-run mode**: Preview changes without executing (display only)
+- **Error handling**: Clear messages with suggestions
+- **Commit operations**: Wrapper around rebase/cherry-pick for advanced operations
 
 **Command Examples**:
 ```
-openisl save [message]  → git commit -m [message] + auto-stage related files + suggest message
-openisl branch [name]   → git checkout -b [name] + conflict detection
-openisl sync            → git pull + status check + conflict resolution guidance
-openisl undo            → git reset HEAD~1 + backup creation + impact preview
-openisl analyze         → Smart analysis of repository state + suggestions
+openisl log [options]     → git log [options] with enhanced visualization
+openisl branch [name]      → git branch [name] or git checkout -b [name]
+openisl checkout <target>    → git checkout <target>
+openisl status              → git status
+openisl diff [options]      → git diff [options]
+openisl remote --list       → git remote -v
+openisl tag --list          → git tag -l
+openisl tag --create v1.0.0 → git tag v1.0.0
 ```
 
 **Data Flow**:
@@ -129,32 +200,53 @@ Data Models (Commit, GitRef, etc.)
 UI/CLI Display
 ```
 
-### 3. Adaptive TUI Engine Module
+### 3. Interactive TUI Engine Module
 
-**Purpose**: Progressive terminal user interface that adapts to user expertise and workflow
+**Purpose**: Progressive terminal user interface for exploring git history and managing files
 
 **Responsibilities**:
-- Render components (lists, trees, forms)
+- Render commit tree with enhanced visualization
 - Handle keyboard input and navigation
-- Display smart stack visualization with relationships
-- Show git history and operations with context
-- Manage application state with progressive disclosure
-- Adapt interface complexity based on user expertise
+- Display syntax-highlighted diffs
+- Show git history with commit graph
+- Manage application state with multiple view modes
+- Support multiple panels (commits, branches, files)
+- Implement search and filter functionality
+- Display repository statistics
 
 **Key Design Decisions**:
 - **Framework**: Use [ratatui](https://github.com/ratatui-org/ratatui) for Rust TUI
 - **Component-based**: Reusable UI components
-- **State management**: Central state with reactive updates
-- **Progressive disclosure**: Show advanced features based on context/expertise
-- **Accessibility**: Keyboard-first, screen reader support
+- **State management**: Central state with view modes
+- **Theme system**: 4 built-in themes (dark, light, monokai, nord)
+- **Keyboard-first**: Full keyboard navigation with optional mouse support
+- **Multiple view modes**: List, Details, Diff, Help, Stats, Filter, CommandPalette
+
+**View Modes**:
+- **List**: Commit tree with navigation
+- **Details**: Full commit information
+- **Diff**: Syntax-highlighted diff viewer
+- **Help**: Keyboard shortcuts overlay
+- **Stats**: Repository statistics (commits by author, activity)
+- **Filter**: Filter commits by author, message, date
+- **CommandPalette**: Searchable command list
 
 **UI Components**:
-- Stack tree viewer with relationships
-- File browser with context-aware preview
-- Git history viewer with commit graph
-- Smart command palette with suggestions
-- Context-aware help system
-- Progressive complexity modes (beginner/intermediate/advanced)
+- Enhanced commit tree with type-specific symbols
+- Syntax-highlighted diff viewer
+- File status panel with stage/unstage actions
+- Branch list panel
+- Repository statistics display
+- Command palette for quick access
+- Help overlay with all shortcuts
+- Status bar with current mode info
+
+**Theme System**:
+- Dark theme (default)
+- Light theme
+- Monokai theme
+- Nord theme
+- Theme-aware syntax highlighting colors
 
 ### 4. Configuration Manager
 
@@ -318,16 +410,23 @@ pub fn detect_stack(path: &Path) -> Result<Stack, Error> {
 
 ### Planned Features
 
-- **Plugin System**: Custom stack detectors
-- **Configuration Profiles**: Per-project settings
-- **Multi-Repo Support**: Analyze multiple repositories
-- **Export Formats**: JSON, SVG, Markdown
-- **Comparison Mode**: Compare stacks between repos/branches
+- **Status Bar Enhancements**: More useful status information
+- **Collapsible Diff Sections**: Better handling of large diffs
+- **Loading States and Progress Indicators**: Better UX during operations
+- **Interactive Rebase**: Visual rebase conflict resolution
+- **Blame Viewer**: Line-by-line commit history
+- **Reflog Browser**: Navigate repository reflog
+- **Custom Themes**: User-defined theme files
+- **Gitignore Integration**: Interactive .gitignore management
+- **Stash Browser**: Visual stash viewer with diff preview
 
 ### Architecture Evolution
 
-- **Async I/O**: Improve performance with async file operations
-- **Microservices**: Separate stack detection as service (future)
+- **Async I/O**: Improve performance with async git operations
+- **Plugin System**: Custom diff parsers and themes
+- **Multi-Repo Support**: View and compare multiple repositories
+- **Export Formats**: Export commit graph as SVG, Mermaid, or JSON
+- **Remote Operations**: Direct integration with remote repositories
 - **Web UI**: Browser-based interface for visualization
 
 ## References
@@ -345,5 +444,5 @@ pub fn detect_stack(path: &Path) -> Result<Stack, Error> {
 
 This architecture document will be updated as openISL evolves.
 
-**Last Updated**: 2026-01-09
-**Next Review**: After initial implementation (Q2 2026)
+**Last Updated**: 2026-01-11
+**Next Review**: After next feature release
