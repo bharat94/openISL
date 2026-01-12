@@ -1,5 +1,6 @@
 pub mod branch;
 pub mod checkout;
+pub mod commit;
 pub mod diff;
 pub mod log;
 pub mod remote;
@@ -11,6 +12,10 @@ pub mod tag;
 
 pub use branch::{create_branch, create_branch_from_commit, get_branches, get_current_branch};
 pub use checkout::{checkout, checkout_commit};
+pub use commit::{
+    amend_commit, cherry_pick_commit, drop_commit, get_commit_message, revert_commit,
+    squash_commits, tag_commit,
+};
 pub use diff::{get_commit_diff, get_diff};
 pub use log::get_commits;
 pub use remote::{fetch, pull, push, remote_add, remote_list, remote_remove, Remote};

@@ -1,5 +1,5 @@
 use crate::error::GitError;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -12,6 +12,17 @@ pub fn run(args: &[&str], cwd: Option<&Path>) -> Result<String> {
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
+}
+
+pub fn run_success(args: &[&str], cwd: Option<&Path>) -> Result<()> {
+    let output = run_raw(args, cwd)?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(GitError::CommandFailed(stderr.to_string()).into());
+    }
+
+    Ok(())
 }
 
 pub fn run_raw(args: &[&str], cwd: Option<&Path>) -> Result<Output> {
