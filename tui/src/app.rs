@@ -526,6 +526,36 @@ impl App {
                 keys: vec!["Ctrl+U".to_string()],
             },
             CommandAction {
+                name: "Amend Commit".to_string(),
+                description: "Amend the last commit".to_string(),
+                action: "amend".to_string(),
+                keys: vec!["A".to_string()],
+            },
+            CommandAction {
+                name: "Drop Commit".to_string(),
+                description: "Remove the selected commit".to_string(),
+                action: "drop".to_string(),
+                keys: vec!["D".to_string()],
+            },
+            CommandAction {
+                name: "Squash Commits".to_string(),
+                description: "Squash selected commit into previous".to_string(),
+                action: "squash".to_string(),
+                keys: vec!["S".to_string()],
+            },
+            CommandAction {
+                name: "Cherry-Pick".to_string(),
+                description: "Cherry-pick the selected commit".to_string(),
+                action: "cherry_pick".to_string(),
+                keys: vec!["C".to_string()],
+            },
+            CommandAction {
+                name: "Revert Commit".to_string(),
+                description: "Revert the selected commit".to_string(),
+                action: "revert".to_string(),
+                keys: vec!["R".to_string()],
+            },
+            CommandAction {
                 name: "Go to Start".to_string(),
                 description: "Jump to first item".to_string(),
                 action: "go_to_start".to_string(),
@@ -652,10 +682,25 @@ impl App {
                 self.fetch_diff();
                 self.view_mode = ViewMode::Diff;
             }
+            KeyCode::Char('A') => {
+                self.amend_commit();
+            }
+            KeyCode::Char('D') => {
+                self.drop_commit();
+            }
+            KeyCode::Char('S') => {
+                self.squash_commits();
+            }
+            KeyCode::Char('C') => {
+                self.cherry_pick_commit();
+            }
+            KeyCode::Char('R') => {
+                self.revert_commit();
+            }
             KeyCode::Char('c') => {
-                if let Some(commit) = self.selected_commit() {
-                    self.status_message = format!("Would checkout {}...", &commit.short_hash);
-                }
+                self.branch_input.clear();
+                self.view_mode = ViewMode::InputBranch;
+                self.status_message = "Enter branch name (or Esc to cancel):".to_string();
             }
             KeyCode::Char('b') => {
                 self.branch_input.clear();
@@ -675,9 +720,6 @@ impl App {
                 } else {
                     self.move_down();
                 }
-            }
-            KeyCode::Char('S') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.stage_all_files();
             }
             KeyCode::Char('U') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.unstage_all_files();
@@ -798,6 +840,11 @@ impl App {
             "toggle_stage" => self.toggle_file_stage(),
             "stage_all" => self.stage_all_files(),
             "unstage_all" => self.unstage_all_files(),
+            "amend" => self.amend_commit(),
+            "drop" => self.drop_commit(),
+            "squash" => self.squash_commits(),
+            "cherry_pick" => self.cherry_pick_commit(),
+            "revert" => self.revert_commit(),
             "toggle_theme" => self.theme.next(),
             "toggle_mouse" => self.toggle_mouse_mode(),
             "help" => self.view_mode = ViewMode::Help,
@@ -1258,6 +1305,120 @@ impl App {
         } else {
             let _ = execute!(stdout(), DisableMouseCapture);
             self.status_message = "Mouse mode: OFF (use keyboard navigation)".to_string();
+        }
+    }
+
+    pub fn amend_commit(&mut self) {
+        if let Some(ref repo_path) = self.repo_path {
+            match openisl_git::amend_commit(repo_path, None) {
+                Ok(_) => {
+                    self.status_message = "Commit amended successfully".to_string();
+                    self.refresh_commits();
+                }
+                Err(e) => {
+                    self.status_message = format!("Error amending commit: {}", e);
+                }
+            }
+        } else {
+            self.status_message = "No repository path available".to_string();
+        }
+    }
+
+    pub fn drop_commit(&mut self) {
+        if let Some(commit) = self.selected_commit() {
+            if let Some(ref repo_path) = self.repo_path {
+                match openisl_git::drop_commit(repo_path, &commit.hash) {
+                    Ok(_) => {
+                        self.status_message = format!("Dropped commit {}", commit.short_hash);
+                        self.refresh_commits();
+                    }
+                    Err(e) => {
+                        self.status_message = format!("Error dropping commit: {}", e);
+                    }
+                }
+            } else {
+                self.status_message = "No repository path available".to_string();
+            }
+        } else {
+            self.status_message = "No commit selected".to_string();
+        }
+    }
+
+    pub fn squash_commits(&mut self) {
+        if let Some(commit) = self.selected_commit() {
+            if let Some(ref repo_path) = self.repo_path {
+                match openisl_git::squash_commits(repo_path, &commit.hash, "Squashed commit") {
+                    Ok(_) => {
+                        self.status_message =
+                            format!("Squashed commits into {}", commit.short_hash);
+                        self.refresh_commits();
+                    }
+                    Err(e) => {
+                        self.status_message = format!("Error squashing commits: {}", e);
+                    }
+                }
+            } else {
+                self.status_message = "No repository path available".to_string();
+            }
+        } else {
+            self.status_message = "No commit selected".to_string();
+        }
+    }
+
+    pub fn cherry_pick_commit(&mut self) {
+        if let Some(commit) = self.selected_commit() {
+            if let Some(ref repo_path) = self.repo_path {
+                match openisl_git::cherry_pick_commit(repo_path, &commit.hash) {
+                    Ok(_) => {
+                        self.status_message = format!("Cherry-picked {}", commit.short_hash);
+                        self.refresh_commits();
+                    }
+                    Err(e) => {
+                        self.status_message = format!("Error cherry-picking: {}", e);
+                    }
+                }
+            } else {
+                self.status_message = "No repository path available".to_string();
+            }
+        } else {
+            self.status_message = "No commit selected".to_string();
+        }
+    }
+
+    pub fn revert_commit(&mut self) {
+        if let Some(commit) = self.selected_commit() {
+            if let Some(ref repo_path) = self.repo_path {
+                match openisl_git::revert_commit(repo_path, &commit.hash) {
+                    Ok(_) => {
+                        self.status_message = format!("Reverted {}", commit.short_hash);
+                        self.refresh_commits();
+                    }
+                    Err(e) => {
+                        self.status_message = format!("Error reverting: {}", e);
+                    }
+                }
+            } else {
+                self.status_message = "No repository path available".to_string();
+            }
+        } else {
+            self.status_message = "No commit selected".to_string();
+        }
+    }
+
+    fn refresh_commits(&mut self) {
+        if let Some(ref repo_path) = self.repo_path {
+            match openisl_git::get_commits(repo_path, Some(100)) {
+                Ok(commits) => {
+                    self.commits = commits.clone();
+                    self.filtered_commits = commits.clone();
+                    self.tree = crate::tree::CommitTree::new(commits);
+                    self.selected_index = 0;
+                    self.scroll_offset = 0;
+                }
+                Err(e) => {
+                    self.status_message = format!("Error refreshing commits: {}", e);
+                }
+            }
         }
     }
 }
@@ -2362,8 +2523,8 @@ mod tests {
 
         assert!(app.status_message.is_empty());
 
-        app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
-        assert!(app.status_message.contains("Would checkout"));
+        app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::SHIFT));
+        assert_eq!(app.view_mode, ViewMode::Diff);
     }
 
     #[test]
@@ -2374,8 +2535,8 @@ mod tests {
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert_eq!(app.view_mode, ViewMode::Details);
 
-        app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
-        assert!(app.status_message.contains("Would checkout"));
+        app.handle_key(KeyEvent::new(KeyCode::Char('d'), KeyModifiers::SHIFT));
+        assert_eq!(app.view_mode, ViewMode::Diff);
     }
 
     #[test]
