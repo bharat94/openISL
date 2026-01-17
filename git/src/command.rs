@@ -1,5 +1,5 @@
 use crate::error::GitError;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 

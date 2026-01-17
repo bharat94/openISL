@@ -24,7 +24,12 @@ pub fn unstage_all(repo_path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn stage_hunk(repo_path: &Path, file: &str, hunk_start: usize, hunk_end: usize) -> Result<()> {
+pub fn stage_hunk(
+    repo_path: &Path,
+    file: &str,
+    _hunk_start: usize,
+    _hunk_end: usize,
+) -> Result<()> {
     run(&["apply", "--cached", "-"], Some(repo_path))
         .with_context(|| format!("Failed to stage hunk for file: {}", file))?;
     Ok(())

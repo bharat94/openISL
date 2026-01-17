@@ -8,6 +8,7 @@ pub mod smart_log;
 pub mod stage;
 pub mod stash;
 pub mod status;
+pub mod sync;
 pub mod tag;
 
 pub use branch::{create_branch, create_branch_from_commit, get_branches, get_current_branch};
@@ -28,4 +29,5 @@ pub use stash::{
     get_stash_list, stash_apply, stash_drop, stash_pop, stash_push, stash_show, StashEntry,
 };
 pub use status::{get_status, FileStatus, StatusType};
+pub use sync::get_sync_state;
 pub use tag::{create_tag, delete_tag, show_tag, tag_list, Tag};
