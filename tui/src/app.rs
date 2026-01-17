@@ -104,6 +104,17 @@ pub struct App {
     pub last_click_position: Option<(u16, u16)>,
     pub last_click_time: Option<std::time::Instant>,
     pub mouse_enabled: bool,
+    pub repo_ahead: Option<usize>,
+    pub repo_behind: Option<usize>,
+    pub has_conflicts: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatusBarMode {
+    Normal,
+    Searching,
+    Filtering,
+    CommandPalette,
 }
 
 impl App {
@@ -150,6 +161,9 @@ impl App {
             last_click_position: None,
             last_click_time: None,
             mouse_enabled: false,
+            repo_ahead: None,
+            repo_behind: None,
+            has_conflicts: false,
         };
         app.calculate_stats();
         app.populate_command_palette();
