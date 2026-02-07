@@ -22,3 +22,7 @@ config.toml.local
 # Documentation
 /docs/book/
 *.log
+
+# Gemini
+GEMINI.md
+
