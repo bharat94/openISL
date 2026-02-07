@@ -84,6 +84,7 @@ pub struct App {
     pub search_query: String,
     pub search_results: Vec<usize>,
     pub is_searching: bool,
+    pub is_loading: bool,
     pub tree: CommitTree,
     pub filter_mode: FilterMode,
     pub filter_input: String,
@@ -141,6 +142,7 @@ impl App {
             search_query: String::new(),
             search_results: Vec::new(),
             is_searching: false,
+            is_loading: false,
             tree: CommitTree::new(commits.clone()),
             filter_mode: FilterMode::Author,
             filter_input: String::new(),
@@ -1150,35 +1152,46 @@ impl App {
     }
 
     pub fn fetch_diff(&mut self) {
+        self.is_loading = true;
         if let Some(commit) = self.selected_commit() {
             if let Some(ref repo_path) = self.repo_path {
                 match get_commit_diff(repo_path, &commit.hash) {
                     Ok(diff) => {
                         self.diff_content = diff;
                         self.parse_diff();
+                        self.is_loading = false;
                     }
                     Err(e) => {
                         self.diff_content = format!("Error fetching diff: {}", e);
                         self.parse_diff();
+                        self.is_loading = false;
                     }
                 }
             } else {
                 self.diff_content = "No repository path available".to_string();
                 self.parse_diff();
+                self.is_loading = false;
             }
+        } else {
+            self.is_loading = false;
         }
     }
 
     pub fn refresh_files(&mut self) {
+        self.is_loading = true;
         if let Some(ref repo_path) = self.repo_path {
             match openisl_git::get_status(repo_path) {
                 Ok(files) => {
                     self.files = files;
+                    self.is_loading = false;
                 }
                 Err(e) => {
                     self.status_message = format!("Error loading files: {}", e);
+                    self.is_loading = false;
                 }
             }
+        } else {
+            self.is_loading = false;
         }
     }
 
@@ -1421,6 +1434,7 @@ impl App {
     }
 
     fn refresh_commits(&mut self) {
+        self.is_loading = true;
         if let Some(ref repo_path) = self.repo_path {
             match openisl_git::get_commits(repo_path, Some(100)) {
                 Ok(commits) => {
@@ -1429,29 +1443,44 @@ impl App {
                     self.tree = crate::tree::CommitTree::new(commits);
                     self.selected_index = 0;
                     self.scroll_offset = 0;
+                    self.is_loading = false;
                 }
                 Err(e) => {
                     self.status_message = format!("Error refreshing commits: {}", e);
+                    self.is_loading = false;
                 }
             }
+        } else {
+            self.is_loading = false;
         }
         self.refresh_sync_state();
     }
 
     fn refresh_sync_state(&mut self) {
+        self.is_loading = true;
         if let Some(ref repo_path) = self.repo_path {
             match openisl_git::get_sync_state(repo_path) {
                 Ok(sync_state) => {
                     self.repo_ahead = sync_state.local_unpushed;
                     self.repo_behind = sync_state.remote_unpulled;
                     self.has_conflicts = sync_state.has_conflicts;
+                    self.is_loading = false;
                 }
                 Err(e) => {
                     self.status_message = format!("Error getting sync state: {}", e);
+                    self.is_loading = false;
                 }
             }
+        } else {
+            self.is_loading = false;
         }
     }
+}
+
+fn get_spinner_char() -> char {
+    let spinner_chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+    let index = (std::time::Instant::now().elapsed().as_millis() / 100) as usize % spinner_chars.len();
+    spinner_chars[index]
 }
 
 pub fn run_tui(
@@ -1621,7 +1650,7 @@ fn render_files_panel(app: &App) -> impl Widget + '_ {
             } else {
                 Style::default().fg(status_color)
             };
-            ListItem::new(content).style(style)
+            ListItem::new(Line::from(content)).style(style)
         })
         .collect();
 
@@ -1655,7 +1684,7 @@ fn render_branches_panel(app: &App) -> impl Widget + '_ {
             } else {
                 Style::default().fg(app.theme.branch_name)
             };
-            ListItem::new(content).style(style)
+            ListItem::new(Line::from(content)).style(style)
         })
         .collect();
 
@@ -1838,7 +1867,7 @@ fn render_command_palette(app: &App, frame: &mut ratatui::Frame) {
             } else {
                 Style::default().fg(app.theme.text)
             };
-            ListItem::new(content).style(style)
+            ListItem::new(Line::from(content)).style(style)
         })
         .collect();
 
@@ -1862,12 +1891,22 @@ fn render_command_palette(app: &App, frame: &mut ratatui::Frame) {
 }
 
 fn render_footer(app: &App, area: Rect, frame: &mut ratatui::Frame) {
-    let sync_text = match (&app.repo_ahead, &app.repo_behind, &app.has_conflicts) {
-        (Some(ahead), Some(behind), false) => format!("↑{} ↓{}", ahead, behind),
-        (Some(ahead), None, false) => format!("↑{}", ahead),
-        (None, Some(behind), false) => format!("↓{}", behind),
-        (_, _, true) => "!".to_string(),
-        _ => String::new(),
+    let loading_text = if app.is_loading {
+        format!(" {} Loading...", get_spinner_char())
+    } else {
+        String::new()
+    };
+
+    let sync_text = if app.is_loading {
+        String::new() // Don't show sync info if loading
+    } else {
+        match (&app.repo_ahead, &app.repo_behind, &app.has_conflicts) {
+            (Some(ahead), Some(behind), false) => format!("↑{} ↓{}", ahead, behind),
+            (Some(ahead), None, false) => format!("↑{}", ahead),
+            (None, Some(behind), false) => format!("↓{}", behind),
+            (_, _, true) => "!".to_string(),
+            _ => String::new(),
+        }
     };
 
     let sync_prefix = if !sync_text.is_empty() { "Sync: " } else { "" };
@@ -1887,12 +1926,17 @@ fn render_footer(app: &App, area: Rect, frame: &mut ratatui::Frame) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Length(if sync_text.is_empty() { 0 } else { 20 }),
+            Constraint::Length(if !loading_text.is_empty() { 20 } else { if sync_text.is_empty() { 0 } else { 20 } }),
             Constraint::Min(0),
         ])
         .split(area);
 
-    if !sync_text.is_empty() {
+    if !loading_text.is_empty() {
+        let loading_widget = Paragraph::new(loading_text)
+            .style(Style::default().fg(app.theme.accent).add_modifier(Modifier::BOLD))
+            .alignment(Alignment::Left);
+        loading_widget.render(chunks[0], frame.buffer_mut());
+    } else if !sync_text.is_empty() {
         let sync_widget = Paragraph::new(sync_display)
             .style(
                 Style::default()
@@ -1912,6 +1956,7 @@ fn render_footer(app: &App, area: Rect, frame: &mut ratatui::Frame) {
         .alignment(Alignment::Center);
     help_widget.render(chunks[1], frame.buffer_mut());
 }
+
 
 fn render_details_view(app: &App, frame: &mut ratatui::Frame) {
     let chunks = Layout::default()
