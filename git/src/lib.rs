@@ -12,8 +12,8 @@ pub use operations::{
     get_commit_diff, get_commit_message, get_commits, get_current_branch, get_diff,
     get_staged_files, get_status, get_sync_state, has_staged_changes, has_unstaged_changes,
     remote_add, remote_list, remote_remove, revert_commit, squash_commits, stage_all, stage_file,
-    tag_commit, tag_list, unstage_all, unstage_file, FileStatus, Remote, SmartLogFormatter,
-    StatusType, Tag,
+        tag_commit, tag_list, unstage_all, unstage_file, open_in_editor,
+        FileStatus, Remote, SmartLogFormatter, StatusType, Tag,
 };
 
 pub use vcs::{Change, Ref, RefType as VcsRefType, SyncState};

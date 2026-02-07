@@ -3497,26 +3497,73 @@ mod tests {
         assert!(app.sidebar_visible);
     }
 
-    #[test]
-    fn test_panel_navigation() {
-        let commits = create_test_commits();
-        let mut app = App::new(commits, "main".to_string(), None);
+        #[test]
 
-        assert_eq!(app.active_panel, PanelType::Commits);
-        app.next_panel();
-        assert_eq!(app.active_panel, PanelType::Files);
-        app.next_panel();
-        assert_eq!(app.active_panel, PanelType::Branches);
-        app.next_panel();
-        assert_eq!(app.active_panel, PanelType::Commits);
+        fn test_panel_navigation() {
 
-        app.prev_panel();
-        assert_eq!(app.active_panel, PanelType::Branches);
-        app.prev_panel();
-        assert_eq!(app.active_panel, PanelType::Files);
-        app.prev_panel();
-        assert_eq!(app.active_panel, PanelType::Commits);
-    }
+            let commits = create_test_commits();
+
+            let mut app = App::new(commits, "main".to_string(), None);
+
+    
+
+            // Initial state
+
+            assert_eq!(app.active_panel, PanelType::Commits);
+
+    
+
+            // Next panel sequence
+
+            app.next_panel(); // Commits -> Stash
+
+            assert_eq!(app.active_panel, PanelType::Stash);
+
+    
+
+            app.next_panel(); // Stash -> Files
+
+            assert_eq!(app.active_panel, PanelType::Files);
+
+    
+
+            app.next_panel(); // Files -> Branches
+
+            assert_eq!(app.active_panel, PanelType::Branches);
+
+    
+
+            app.next_panel(); // Branches -> Commits
+
+            assert_eq!(app.active_panel, PanelType::Commits);
+
+    
+
+            // Previous panel sequence
+
+            app.prev_panel(); // Commits -> Branches
+
+            assert_eq!(app.active_panel, PanelType::Branches);
+
+    
+
+            app.prev_panel(); // Branches -> Files
+
+            assert_eq!(app.active_panel, PanelType::Files);
+
+    
+
+            app.prev_panel(); // Files -> Stash
+
+            assert_eq!(app.active_panel, PanelType::Stash);
+
+    
+
+            app.prev_panel(); // Stash -> Commits
+
+            assert_eq!(app.active_panel, PanelType::Commits);
+
+        }
 
     #[test]
     fn test_vim_keybindings_gg_go_to_start() {
