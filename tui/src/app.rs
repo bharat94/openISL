@@ -1581,8 +1581,8 @@ fn render_panel_tab(
     block.render(area, frame.buffer_mut());
 }
 
-fn render_files_panel(app: &App) -> impl Widget {
-    let items: Vec<ListItem<'static>> = app
+fn render_files_panel(app: &App) -> impl Widget + '_ {
+    let items: Vec<ListItem<'_>> = app
         .files
         .iter()
         .map(|file| {
@@ -1636,8 +1636,8 @@ fn render_files_panel(app: &App) -> impl Widget {
     list
 }
 
-fn render_branches_panel(app: &App) -> impl Widget {
-    let items: Vec<ListItem<'static>> = app
+fn render_branches_panel(app: &App) -> impl Widget + '_ {
+    let items: Vec<ListItem<'_>> = app
         .branches
         .iter()
         .map(|branch| {
