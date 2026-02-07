@@ -1554,18 +1554,20 @@ fn render_panel_tab(
     frame: &mut ratatui::Frame,
 ) {
     let is_active = app.active_panel == panel_type;
-    let (style, border_type) = if is_active {
+    let (style, border_type, border_color) = if is_active {
         (
             Style::default()
                 .fg(app.theme.selected)
-                .bg(app.theme.selected_bg)
+                .bg(app.theme.panel_title_active_bg)
                 .add_modifier(Modifier::BOLD),
             BorderType::Double,
+            app.theme.panel_border_active,
         )
     } else {
         (
-            Style::default().fg(app.theme.text).bg(app.theme.background),
+            Style::default().fg(app.theme.text).bg(app.theme.panel_title_inactive_bg),
             BorderType::Plain,
+            app.theme.panel_border_inactive,
         )
     };
 
@@ -1573,6 +1575,7 @@ fn render_panel_tab(
         .title(title)
         .borders(Borders::ALL)
         .border_type(border_type)
+        .border_style(Style::default().fg(border_color))
         .style(style);
 
     block.render(area, frame.buffer_mut());
@@ -1583,7 +1586,7 @@ fn render_files_panel(app: &App) -> impl Widget {
         .files
         .iter()
         .map(|file| {
-            let status = match file.status {
+            let status_char = match file.status {
                 openisl_git::StatusType::Modified => "M",
                 openisl_git::StatusType::Added => "A",
                 openisl_git::StatusType::Deleted => "D",
@@ -1594,7 +1597,19 @@ fn render_files_panel(app: &App) -> impl Widget {
                 openisl_git::StatusType::Renamed => "R",
                 openisl_git::StatusType::Conflicted => "C",
             };
-            let content = format!("{} {}", status, file.path);
+            let status_color = match file.status {
+                openisl_git::StatusType::Modified => app.theme.file_status_modified,
+                openisl_git::StatusType::Added => app.theme.file_status_added,
+                openisl_git::StatusType::Deleted => app.theme.file_status_deleted,
+                openisl_git::StatusType::Untracked => app.theme.file_status_untracked,
+                openisl_git::StatusType::ModifiedStaged => app.theme.file_status_modified, // Staged modified
+                openisl_git::StatusType::AddedStaged => app.theme.file_status_added,     // Staged added
+                openisl_git::StatusType::DeletedStaged => app.theme.file_status_deleted, // Staged deleted
+                openisl_git::StatusType::Renamed => app.theme.accent,                     // Renamed files
+                openisl_git::StatusType::Conflicted => app.theme.error,                   // Conflicted files
+            };
+
+            let content = format!("{} {}", status_char, file.path);
             let is_selected = app.selected_file_index
                 == app
                     .files
@@ -1602,9 +1617,9 @@ fn render_files_panel(app: &App) -> impl Widget {
                     .position(|f| f.path == file.path)
                     .unwrap_or(0);
             let style = if is_selected {
-                Style::default().fg(Color::White).bg(app.theme.selected_bg)
+                Style::default().fg(app.theme.selected).bg(app.theme.selected_bg)
             } else {
-                Style::default().fg(Color::White)
+                Style::default().fg(status_color)
             };
             ListItem::new(content).style(style)
         })
@@ -1615,7 +1630,7 @@ fn render_files_panel(app: &App) -> impl Widget {
             .title(format!("Files ({})", app.files.len()))
             .borders(Borders::ALL)
             .border_type(BorderType::Plain)
-            .style(Style::default().fg(app.theme.border)),
+            .border_style(Style::default().fg(app.theme.panel_border_inactive)),
     );
 
     list
@@ -1636,9 +1651,9 @@ fn render_branches_panel(app: &App) -> impl Widget {
                     .position(|b| b.name == branch.name)
                     .unwrap_or(0);
             let style = if is_selected {
-                Style::default().fg(Color::White).bg(app.theme.selected_bg)
+                Style::default().fg(app.theme.selected).bg(app.theme.selected_bg)
             } else {
-                Style::default().fg(Color::White)
+                Style::default().fg(app.theme.branch_name)
             };
             ListItem::new(content).style(style)
         })
@@ -1649,35 +1664,35 @@ fn render_branches_panel(app: &App) -> impl Widget {
             .title(format!("Branches ({})", app.branches.len()))
             .borders(Borders::ALL)
             .border_type(BorderType::Plain)
-            .style(Style::default().fg(app.theme.border)),
+            .border_style(Style::default().fg(app.theme.panel_border_inactive)),
     );
 
     list
 }
 
-fn render_commits_panel(app: &App, area: Rect) -> impl Widget {
+fn render_commits_panel(app: &App, area: Rect) -> impl Widget + '_ {
     let panel_height = area.height.saturating_sub(2) as usize;
     let visible_count = panel_height.max(1);
-    let raw_lines = format_tree_lines(app.tree.nodes(), app.scroll_offset, visible_count);
+    let raw_lines = format_tree_lines(app.tree.nodes(), app.scroll_offset, visible_count, &app.theme);
 
-    let lines: Vec<Line<'static>> = raw_lines
+    let lines: Vec<ListItem<'_>> = raw_lines
         .into_iter()
         .enumerate()
         .map(|(i, line)| {
             let global_index = app.scroll_offset + i;
             let is_selected = global_index == app.selected_index;
-            let line_clone = line.clone();
 
-            if is_selected {
-                Line::from(line_clone).style(
+            let styled_line = if is_selected {
+                line.style(
                     Style::default()
-                        .fg(Color::White)
+                        .fg(app.theme.selected)
                         .add_modifier(Modifier::BOLD)
                         .bg(app.theme.selected_bg),
                 )
             } else {
-                Line::from(line_clone).style(Style::default().fg(Color::White))
-            }
+                line
+            };
+            ListItem::new(styled_line)
         })
         .collect();
 
@@ -1690,7 +1705,7 @@ fn render_commits_panel(app: &App, area: Rect) -> impl Widget {
             ))
             .borders(Borders::ALL)
             .border_type(BorderType::Plain)
-            .style(Style::default().fg(app.theme.border)),
+            .border_style(Style::default().fg(app.theme.panel_border_inactive)),
     );
 
     list
@@ -1725,25 +1740,24 @@ fn render_main_content(app: &App, area: Rect, frame: &mut ratatui::Frame) {
 
     let content_height = chunks[1].height.saturating_sub(2) as usize;
     let visible_count = content_height.max(1);
-    let raw_lines = format_tree_lines(app.tree.nodes(), app.scroll_offset, visible_count);
+    let raw_lines = format_tree_lines(app.tree.nodes(), app.scroll_offset, visible_count, &app.theme);
 
-    let lines: Vec<Line<'static>> = raw_lines
+    let lines: Vec<Line<'_>> = raw_lines
         .into_iter()
         .enumerate()
         .map(|(i, line)| {
             let global_index = app.scroll_offset + i;
             let is_selected = global_index == app.selected_index;
-            let line_clone = line.clone();
 
             if is_selected {
-                Line::from(line_clone).style(
+                line.style(
                     Style::default()
-                        .fg(Color::White)
+                        .fg(app.theme.selected)
                         .add_modifier(Modifier::BOLD)
                         .bg(app.theme.selected_bg),
                 )
             } else {
-                Line::from(line_clone).style(Style::default().fg(Color::White))
+                line
             }
         })
         .collect();

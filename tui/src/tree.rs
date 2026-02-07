@@ -1,3 +1,5 @@
+use ratatui::prelude::{Line, Span, Style};
+use crate::theme::Theme;
 use openisl_git::Commit;
 use std::collections::{HashMap, HashSet};
 
@@ -209,31 +211,42 @@ impl CommitTree {
     }
 }
 
-pub fn format_tree_node(node: &TreeNode, _is_last: bool, selected: bool) -> String {
-    let mut line = String::new();
+pub fn format_tree_node<'a>(
+    node: &'a TreeNode,
+    _is_last: bool,
+    selected: bool,
+    theme: &'a Theme,
+) -> Line<'a> {
+    let mut spans = Vec::new();
 
+    // Graph part
+    let mut graph_str = String::new();
     for (idx, lane) in node.branch_lanes.iter().enumerate() {
+        // Here we could use lane.lane_color if we wanted different colors for graph lines
         if lane.is_continuing {
             if lane.is_merge {
-                line.push('┤');
+                graph_str.push('┤');
             } else if lane.is_active {
-                line.push('│');
+                graph_str.push('│');
             } else {
-                line.push(' ');
+                graph_str.push(' ');
             }
         } else if lane.is_branch_point && idx == node.lane_index {
-            line.push('┬');
+            graph_str.push('┬');
         } else {
-            line.push(' ');
+            graph_str.push(' ');
         }
     }
+    spans.push(Span::raw(graph_str));
 
+    // Selection indicator
     if selected {
-        line.push_str(" >");
+        spans.push(Span::raw(" >"));
     } else {
-        line.push(' ');
+        spans.push(Span::raw(" "));
     }
 
+    // Commit symbol
     let commit_symbol = match node.commit_type {
         CommitType::Initial if node.is_main_branch => "┌●",
         CommitType::Initial => "┌○",
@@ -250,16 +263,30 @@ pub fn format_tree_node(node: &TreeNode, _is_last: bool, selected: bool) -> Stri
         CommitType::Regular if node.is_main_branch => "─●",
         CommitType::Regular => "─○",
     };
+    spans.push(Span::raw(commit_symbol));
+    spans.push(Span::raw(" "));
 
-    line.push_str(commit_symbol);
-    line.push(' ');
-
+    // Hash
     let hash_part = if node.is_main_branch {
         format!("{}*", node.commit.short_hash)
     } else {
         node.commit.short_hash.clone()
     };
+    spans.push(Span::styled(hash_part, Style::default().fg(theme.commit_hash)));
+    spans.push(Span::raw(" "));
 
+    // Summary
+    spans.push(Span::raw(format!("- {}", node.commit.summary)));
+    spans.push(Span::raw(" "));
+
+    // Relative time
+    let relative_time = format_relative_time(node.commit.date);
+    spans.push(Span::styled(
+        format!("({})", relative_time),
+        Style::default().fg(theme.commit_date),
+    ));
+
+    // Branches
     let branch_names: Vec<String> = node
         .commit
         .refs
@@ -279,6 +306,22 @@ pub fn format_tree_node(node: &TreeNode, _is_last: bool, selected: bool) -> Stri
         .filter(|n| !n.is_empty())
         .collect();
 
+    if !branch_names.is_empty() {
+        spans.push(Span::raw(" ["));
+        let styled_branches: Vec<Span> = branch_names
+            .into_iter()
+            .map(|name| Span::styled(name, Style::default().fg(theme.branch_name)))
+            .collect();
+        for (i, branch_span) in styled_branches.into_iter().enumerate() {
+            if i > 0 {
+                spans.push(Span::raw(", "));
+            }
+            spans.push(branch_span);
+        }
+        spans.push(Span::raw("]"));
+    }
+
+    // Tags
     let tags: Vec<String> = node
         .commit
         .refs
@@ -294,23 +337,23 @@ pub fn format_tree_node(node: &TreeNode, _is_last: bool, selected: bool) -> Stri
         })
         .collect();
 
-    let relative_time = format_relative_time(node.commit.date);
-
-    let mut content = hash_part.to_string();
-    content.push_str(&format!(" - {}", node.commit.summary));
-    content.push_str(&format!(" ({})", relative_time));
-
-    if !branch_names.is_empty() {
-        content.push_str(&format!(" [{}]", branch_names.join(", ")));
-    }
-
     if !tags.is_empty() {
-        content.push_str(&format!(" (tags: {})", tags.join(", ")));
+        spans.push(Span::raw(" (tags: "));
+        let styled_tags: Vec<Span> = tags
+            .into_iter()
+            .map(|name| Span::styled(name, Style::default().fg(theme.accent))) // Use accent color for tags
+            .collect();
+        for (i, tag_span) in styled_tags.into_iter().enumerate() {
+            if i > 0 {
+                spans.push(Span::raw(", "));
+            }
+            spans.push(tag_span);
+        }
+        spans.push(Span::raw(")"));
     }
 
-    line.push_str(&content);
+    Line::from(spans)
 
-    line
 }
 
 fn format_relative_time(date: chrono::DateTime<chrono::Utc>) -> String {
@@ -339,11 +382,12 @@ fn format_relative_time(date: chrono::DateTime<chrono::Utc>) -> String {
     }
 }
 
-pub fn format_tree_lines(
-    commits: &[TreeNode],
+pub fn format_tree_lines<'a>(
+    commits: &'a [TreeNode],
     visible_start: usize,
     visible_count: usize,
-) -> Vec<String> {
+    theme: &'a Theme,
+) -> Vec<Line<'a>> {
     commits
         .iter()
         .skip(visible_start)
@@ -352,7 +396,7 @@ pub fn format_tree_lines(
         .map(|(i, node)| {
             let _global_index = visible_start + i;
             let is_last = _global_index == commits.len() - 1;
-            format_tree_node(node, is_last, false)
+            format_tree_node(node, is_last, false, theme)
         })
         .collect()
 }
@@ -361,6 +405,11 @@ pub fn format_tree_lines(
 mod tests {
     use super::*;
     use chrono::Utc;
+    use crate::theme::Theme;
+
+    fn create_test_theme() -> Theme {
+        Theme::dark()
+    }
 
     fn create_test_commit(hash: &str, summary: &str, parents: Vec<&str>) -> Commit {
         let short_len = hash.len().min(7);
@@ -426,9 +475,11 @@ mod tests {
         let commits = vec![create_test_commit("abc123def456789", "Test commit", vec![])];
         let tree = CommitTree::new(commits);
         let node = &tree.nodes()[0];
-        let line = format_tree_node(node, true, false);
-        assert!(line.contains("abc123d"));
-        assert!(line.contains("Test commit"));
+        let theme = create_test_theme();
+        let line = format_tree_node(node, true, false, &theme);
+        let plain_text: String = line.iter().map(|s| s.content.to_string()).collect();
+        assert!(plain_text.contains("abc123d"));
+        assert!(plain_text.contains("Test commit"));
     }
 
     #[test]
@@ -436,16 +487,18 @@ mod tests {
         let commits = vec![create_test_commit("abc123def456789", "Test commit", vec![])];
         let tree = CommitTree::new(commits);
         let node = &tree.nodes()[0];
-        let line = format_tree_node(node, false, false);
+        let theme = create_test_theme();
+        let line = format_tree_node(node, false, false, &theme);
+        let plain_text: String = line.iter().map(|s| s.content.to_string()).collect();
         assert!(
-            line.contains("abc123d"),
+            plain_text.contains("abc123d"),
             "Expected line to contain hash, got: {}",
-            line
+            plain_text
         );
         assert!(
-            line.contains("Test commit"),
+            plain_text.contains("Test commit"),
             "Expected line to contain summary, got: {}",
-            line
+            plain_text
         );
     }
 
@@ -454,8 +507,10 @@ mod tests {
         let commits = vec![create_test_commit("abc123def456789", "Test commit", vec![])];
         let tree = CommitTree::new(commits);
         let node = &tree.nodes()[0];
-        let line = format_tree_node(node, true, false);
-        assert!(line.contains('●') || line.contains('○'));
+        let theme = create_test_theme();
+        let line = format_tree_node(node, true, false, &theme);
+        let plain_text: String = line.iter().map(|s| s.content.to_string()).collect();
+        assert!(plain_text.contains('●') || plain_text.contains('○'));
     }
 
     #[test]
@@ -466,9 +521,12 @@ mod tests {
             create_test_commit("a123456789abcde", "First", vec![]),
         ];
         let tree = CommitTree::new(commits);
-        let lines = format_tree_lines(tree.nodes(), 0, 10);
+        let theme = create_test_theme();
+        let lines = format_tree_lines(tree.nodes(), 0, 10, &theme);
         assert_eq!(lines.len(), 3);
-        let all_content: String = lines.join(" ");
+        let all_content: String = lines.into_iter().map(|line| {
+            line.spans.iter().map(|s| s.content.to_string()).collect::<String>()
+        }).collect::<Vec<String>>().join(" ");
         assert!(
             all_content.contains("c123456")
                 || all_content.contains("b123456")
@@ -484,12 +542,14 @@ mod tests {
             create_test_commit("a123456789abcde", "First", vec![]),
         ];
         let tree = CommitTree::new(commits);
-        let lines = format_tree_lines(tree.nodes(), 1, 10);
+        let theme = create_test_theme();
+        let lines = format_tree_lines(tree.nodes(), 1, 10, &theme);
         assert_eq!(lines.len(), 2);
-        let all_content: String = lines.join(" ");
+        let all_content: String = lines.into_iter().map(|line| {
+            line.spans.iter().map(|s| s.content.to_string()).collect::<String>()
+        }).collect::<Vec<String>>().join(" ");
         assert!(all_content.contains("b123456") || all_content.contains("a123456"));
     }
-
     #[test]
     fn test_format_tree_lines_with_limit() {
         let commits = vec![
@@ -498,10 +558,10 @@ mod tests {
             create_test_commit("a123456789abcde", "First", vec![]),
         ];
         let tree = CommitTree::new(commits);
-        let lines = format_tree_lines(tree.nodes(), 0, 2);
+        let theme = create_test_theme();
+        let lines = format_tree_lines(tree.nodes(), 0, 2, &theme);
         assert_eq!(lines.len(), 2);
     }
-
     #[test]
     fn test_tree_max_depth() {
         let commits = vec![
@@ -564,10 +624,11 @@ mod tests {
         }];
         let tree = CommitTree::new(vec![commit]);
         let node = &tree.nodes()[0];
-        let line = format_tree_node(node, true, false);
-        assert!(line.contains("main"));
+        let theme = create_test_theme();
+        let line = format_tree_node(node, true, false, &theme);
+        let plain_text: String = line.iter().map(|s| s.content.to_string()).collect();
+        assert!(plain_text.contains("main"));
     }
-
     #[test]
     fn test_commit_type_initial() {
         let commits = vec![create_test_commit("abc123def456789", "Initial", vec![])];
@@ -635,20 +696,22 @@ mod tests {
         }];
         let tree = CommitTree::new(vec![commit]);
         let node = &tree.nodes()[0];
-        let line = format_tree_node(node, true, false);
-        assert!(line.contains("tags"));
-        assert!(line.contains("v1.0.0"));
+        let theme = create_test_theme();
+        let line = format_tree_node(node, true, false, &theme);
+        let plain_text: String = line.iter().map(|s| s.content.to_string()).collect();
+        assert!(plain_text.contains("tags"));
+        assert!(plain_text.contains("v1.0.0"));
     }
-
     #[test]
     fn test_format_tree_node_selected() {
         let commits = vec![create_test_commit("abc123def456789", "Test commit", vec![])];
         let tree = CommitTree::new(commits);
         let node = &tree.nodes()[0];
-        let line = format_tree_node(node, false, true);
-        assert!(line.contains('>'));
+        let theme = create_test_theme();
+        let line = format_tree_node(node, false, true, &theme);
+        let plain_text: String = line.iter().map(|s| s.content.to_string()).collect();
+        assert!(plain_text.contains('>'));
     }
-
     #[test]
     fn test_lane_index_assigned() {
         let commits = vec![
