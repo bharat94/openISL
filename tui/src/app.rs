@@ -1554,19 +1554,25 @@ fn render_panel_tab(
     frame: &mut ratatui::Frame,
 ) {
     let is_active = app.active_panel == panel_type;
-    let style = if is_active {
-        Style::default()
-            .fg(app.theme.selected)
-            .bg(app.theme.selected_bg)
-            .add_modifier(Modifier::BOLD)
+    let (style, border_type) = if is_active {
+        (
+            Style::default()
+                .fg(app.theme.selected)
+                .bg(app.theme.selected_bg)
+                .add_modifier(Modifier::BOLD),
+            BorderType::Double,
+        )
     } else {
-        Style::default().fg(app.theme.text).bg(app.theme.background)
+        (
+            Style::default().fg(app.theme.text).bg(app.theme.background),
+            BorderType::Plain,
+        )
     };
 
     let block = Block::default()
         .title(title)
         .borders(Borders::ALL)
-        .border_type(BorderType::Plain)
+        .border_type(border_type)
         .style(style);
 
     block.render(area, frame.buffer_mut());
