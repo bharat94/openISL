@@ -12,6 +12,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode},
 };
 use openisl_git::{get_commit_diff, Commit, FileStatus, GitRef};
+use openisl_git::operations::{stash_apply, stash_drop, stash_pop, stash_show, get_stash_list, StashEntry};
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -26,6 +27,7 @@ pub enum PanelType {
     Files,
     Branches,
     Commits,
+    Stash,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -40,6 +42,7 @@ pub enum ViewMode {
     Filter,
     Stats,
     CommandPalette,
+    Stash,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -103,6 +106,10 @@ pub struct App {
     pub all_branches: Vec<GitRef>,
     pub selected_branch_index: usize,
     pub branch_scroll_offset: usize,
+    pub stashes: Vec<StashEntry>,
+    pub selected_stash_index: usize,
+    pub stash_scroll_offset: usize,
+    pub stash_diff_content: String,
     pub command_palette_input: String,
     pub command_palette_results: Vec<CommandAction>,
     pub mouse_scroll_offset: usize,
@@ -170,6 +177,10 @@ impl App {
             all_branches,
             selected_branch_index: 0,
             branch_scroll_offset: 0,
+            stashes: Vec::new(),
+            selected_stash_index: 0,
+            stash_scroll_offset: 0,
+            stash_diff_content: String::new(),
             command_palette_input: String::new(),
             command_palette_results: Vec::new(),
             mouse_scroll_offset: 0,
@@ -481,16 +492,18 @@ impl App {
         self.active_panel = match self.active_panel {
             PanelType::Files => PanelType::Branches,
             PanelType::Branches => PanelType::Commits,
-            PanelType::Commits => PanelType::Files,
+            PanelType::Commits => PanelType::Stash,
+            PanelType::Stash => PanelType::Files,
         };
         self.status_message = format!("Switched to {} panel", self.panel_name());
     }
 
     pub fn prev_panel(&mut self) {
         self.active_panel = match self.active_panel {
-            PanelType::Files => PanelType::Commits,
+            PanelType::Files => PanelType::Stash,
             PanelType::Branches => PanelType::Files,
             PanelType::Commits => PanelType::Branches,
+            PanelType::Stash => PanelType::Commits,
         };
         self.status_message = format!("Switched to {} panel", self.panel_name());
     }
@@ -500,6 +513,7 @@ impl App {
             PanelType::Files => "Files",
             PanelType::Branches => "Branches",
             PanelType::Commits => "Commits",
+            PanelType::Stash => "Stash",
         }
         .to_string()
     }
@@ -676,6 +690,7 @@ impl App {
             ViewMode::Filter => self.handle_filter_key(key),
             ViewMode::Stats => self.handle_stats_key(key),
             ViewMode::CommandPalette => self.handle_command_palette_key(key),
+            ViewMode::Stash => self.handle_stash_key(key),
         }
     }
 
@@ -876,6 +891,66 @@ impl App {
             KeyCode::Down => {
                 if !self.command_palette_results.is_empty() {
                     self.command_palette_results.rotate_left(1);
+                }
+            }
+            _ => {}
+        }
+        false
+    }
+
+    fn handle_stash_key(&mut self, key: KeyEvent) -> bool {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.view_mode = ViewMode::List;
+                self.stash_diff_content.clear();
+                return false;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if self.selected_stash_index < self.stashes.len().saturating_sub(1) {
+                    self.selected_stash_index += 1;
+                    if self.selected_stash_index >= self.stash_scroll_offset + 10 {
+                        self.stash_scroll_offset = self.selected_stash_index - 10 + 1;
+                    }
+                    if let Some(stash) = self.stashes.get(self.selected_stash_index) {
+                        let stash_name = stash.name.clone();
+                    self.fetch_stash_diff(&stash_name);
+                    }
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                if self.selected_stash_index > 0 {
+                    self.selected_stash_index = self.selected_stash_index.saturating_sub(1);
+                    if self.selected_stash_index < self.stash_scroll_offset {
+                        self.stash_scroll_offset = self.selected_stash_index.saturating_sub(1);
+                    }
+                    if let Some(stash) = self.stashes.get(self.selected_stash_index) {
+                        let stash_name = stash.name.clone();
+                    self.fetch_stash_diff(&stash_name);
+                    }
+                }
+            }
+            KeyCode::Enter => {
+                if let Some(stash) = self.stashes.get(self.selected_stash_index) {
+                    let stash_name = stash.name.clone();
+                    self.fetch_stash_diff(&stash_name);
+                }
+            }
+            KeyCode::Char('a') => {
+                if let Some(stash) = self.stashes.get(self.selected_stash_index) {
+                    let stash_name = stash.name.clone();
+                    self.apply_stash(Some(&stash_name));
+                }
+            }
+            KeyCode::Char('d') => {
+                if let Some(stash) = self.stashes.get(self.selected_stash_index) {
+                    let stash_name = stash.name.clone();
+                    self.drop_stash(Some(&stash_name));
+                }
+            }
+            KeyCode::Char('p') => {
+                if let Some(stash) = self.stashes.get(self.selected_stash_index) {
+                    let stash_name = stash.name.clone();
+                    self.pop_stash(Some(&stash_name));
                 }
             }
             _ => {}
@@ -1545,6 +1620,106 @@ impl App {
             self.is_loading = false;
         }
     }
+
+    pub fn refresh_stashes(&mut self) {
+        self.is_loading = true;
+        if let Some(ref repo_path) = self.repo_path {
+            match get_stash_list(repo_path) {
+                Ok(stashes) => {
+                    self.stashes = stashes;
+                    self.selected_stash_index = 0;
+                    self.stash_scroll_offset = 0;
+                    self.is_loading = false;
+                }
+                Err(e) => {
+                    self.status_message = format!("Error refreshing stashes: {}", e);
+                    self.is_loading = false;
+                }
+            }
+        } else {
+            self.status_message = "No repository path available".to_string();
+            self.is_loading = false;
+        }
+    }
+
+    pub fn fetch_stash_diff(&mut self, stash_index_str: &str) {
+        self.is_loading = true;
+        if let Some(ref repo_path) = self.repo_path {
+            match stash_show(repo_path, stash_index_str) {
+                Ok(diff) => {
+                    self.stash_diff_content = diff;
+                    self.is_loading = false;
+                }
+                Err(e) => {
+                    self.stash_diff_content = format!("Error fetching stash diff: {}", e);
+                    self.is_loading = false;
+                }
+            }
+        } else {
+            self.stash_diff_content = "No repository path available".to_string();
+            self.is_loading = false;
+        }
+    }
+
+    pub fn apply_stash(&mut self, stash_index_str: Option<&str>) {
+        self.is_loading = true;
+        if let Some(ref repo_path) = self.repo_path {
+            match stash_apply(repo_path, stash_index_str) {
+                Ok(_) => {
+                    self.status_message = format!("Stash {} applied", stash_index_str.unwrap_or("0"));
+                    self.refresh_stashes();
+                    self.is_loading = false;
+                }
+                Err(e) => {
+                    self.status_message = format!("Error applying stash: {}", e);
+                    self.is_loading = false;
+                }
+            }
+        } else {
+            self.status_message = "No repository path available".to_string();
+            self.is_loading = false;
+        }
+    }
+
+    pub fn drop_stash(&mut self, stash_index_str: Option<&str>) {
+        self.is_loading = true;
+        if let Some(ref repo_path) = self.repo_path {
+            match stash_drop(repo_path, stash_index_str) {
+                Ok(_) => {
+                    self.status_message = format!("Stash {} dropped", stash_index_str.unwrap_or("0"));
+                    self.refresh_stashes();
+                    self.is_loading = false;
+                }
+                Err(e) => {
+                    self.status_message = format!("Error dropping stash: {}", e);
+                    self.is_loading = false;
+                }
+            }
+        } else {
+            self.status_message = "No repository path available".to_string();
+            self.is_loading = false;
+        }
+    }
+
+    pub fn pop_stash(&mut self, stash_index_str: Option<&str>) {
+        self.is_loading = true;
+        if let Some(ref repo_path) = self.repo_path {
+            match stash_pop(repo_path, stash_index_str) {
+                Ok(_) => {
+                    self.status_message = format!("Stash {} popped", stash_index_str.unwrap_or("0"));
+                    self.refresh_stashes();
+                    self.is_loading = false;
+                }
+                Err(e) => {
+                    self.status_message = format!("Error popping stash: {}", e);
+                    self.is_loading = false;
+                }
+            }
+        } else {
+            self.status_message = "No repository path available".to_string();
+            self.is_loading = false;
+        }
+    }
 }
 
 fn get_spinner_char() -> char {
@@ -1581,6 +1756,7 @@ pub fn run_tui(
             ViewMode::Filter => render_filter_view(&app, frame),
             ViewMode::Stats => render_stats_view(&app, frame),
             ViewMode::CommandPalette => render_command_palette(&app, frame),
+            ViewMode::Stash => render_stash_view(&app, frame),
         })?;
 
         if event::poll(std::time::Duration::from_millis(50))? {
@@ -1630,15 +1806,17 @@ fn render_sidebar(app: &App, area: Rect, frame: &mut ratatui::Frame) {
         .constraints([
             Constraint::Length(3),
             Constraint::Length(3),
+            Constraint::Length(3), // Added for Stash tab
             Constraint::Min(10),
         ])
         .split(area);
 
     render_panel_tab(app, PanelType::Files, " FILES ", chunks[0], frame);
     render_panel_tab(app, PanelType::Branches, " BRANCHES ", chunks[1], frame);
+    render_panel_tab(app, PanelType::Stash, " STASH ", chunks[2], frame); // Added
 
     match app.active_panel {
-        PanelType::Files => render_files_panel(app).render(chunks[2], frame.buffer_mut()),
+        PanelType::Files => render_files_panel(app).render(chunks[3], frame.buffer_mut()),
         PanelType::Branches => {
             if app.view_mode == ViewMode::BranchSearch {
                 let branch_search_chunks = Layout::default()
@@ -1647,16 +1825,17 @@ fn render_sidebar(app: &App, area: Rect, frame: &mut ratatui::Frame) {
                         Constraint::Length(3), // For the search input
                         Constraint::Min(10), // For the filtered branches list
                     ])
-                    .split(chunks[2]);
+                    .split(chunks[3]);
                 render_branch_search_input(app, branch_search_chunks[0], frame);
                 render_branches_panel(app).render(branch_search_chunks[1], frame.buffer_mut());
             } else {
-                render_branches_panel(app).render(chunks[2], frame.buffer_mut())
+                render_branches_panel(app).render(chunks[3], frame.buffer_mut())
             }
         }
         PanelType::Commits => {
-            render_commits_panel(app, chunks[2]).render(chunks[2], frame.buffer_mut())
+            render_commits_panel(app, chunks[3]).render(chunks[3], frame.buffer_mut())
         }
+        _ => {} // Handles PanelType::Stash, as its content rendering is done in render_stash_view
     }
 }
 
@@ -1921,6 +2100,62 @@ fn render_branch_search_input(app: &App, area: Rect, frame: &mut ratatui::Frame)
                 .style(Style::default().fg(app.theme.border)),
         );
     input_widget.render(area, frame.buffer_mut());
+}
+
+fn render_stash_view(app: &App, frame: &mut ratatui::Frame) {
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
+        .split(frame.size());
+
+    // Render stash list
+    let items: Vec<ListItem<'_>> = app
+        .stashes
+        .iter()
+        .enumerate()
+        .map(|(i, stash)| {
+            let content = format!("[{}] {} ({})", i, stash.message, stash.name);
+            let is_selected = i == app.selected_stash_index;
+            let style = if is_selected {
+                Style::default().fg(app.theme.selected).bg(app.theme.selected_bg)
+            } else {
+                Style::default().fg(app.theme.text)
+            };
+            ListItem::new(Line::from(content)).style(style)
+        })
+        .collect();
+
+    let list = List::new(items)
+        .block(
+            Block::default()
+                .title("Stashes")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Plain)
+                .border_style(Style::default().fg(app.theme.border)),
+        )
+        .highlight_style(
+            Style::default()
+                .bg(app.theme.selected_bg)
+                .fg(app.theme.selected)
+                .add_modifier(Modifier::BOLD),
+        );
+
+    // Placeholder for actual diff rendering
+    let diff_text = Paragraph::new(app.stash_diff_content.clone())
+        .block(
+            Block::default()
+                .title("Stash Diff")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Plain)
+                .border_style(Style::default().fg(app.theme.border)),
+        )
+        .wrap(ratatui::widgets::Wrap { trim: false });
+
+
+    frame.render_widget(list, chunks[0]);
+    frame.render_widget(diff_text, chunks[1]);
+
+    render_footer(app, frame.size(), frame);
 }
 
 fn render_footer(app: &App, area: Rect, frame: &mut ratatui::Frame) {
