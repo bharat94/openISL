@@ -25,4 +25,5 @@ config.toml.local
 
 # Gemini
 GEMINI.md
+TUI_IMPROVEMENTS.md
 
