@@ -445,11 +445,7 @@ mod tests {
 
     #[test]
     fn test_linear_commits() {
-        let commits = vec![
-            create_test_commit("c123456789abcde", "Third", vec!["b123456789abcde"]),
-            create_test_commit("b123456789abcde", "Second", vec!["a123456789abcde"]),
-            create_test_commit("a123456789abcde", "First", vec![]),
-        ];
+        let commits = create_test_commits_with_dates();
         let tree = CommitTree::new(commits);
         assert_eq!(tree.nodes().len(), 3);
     }
@@ -515,11 +511,7 @@ mod tests {
 
     #[test]
     fn test_format_tree_lines() {
-        let commits = vec![
-            create_test_commit("c123456789abcde", "Third", vec!["b123456789abcde"]),
-            create_test_commit("b123456789abcde", "Second", vec!["a123456789abcde"]),
-            create_test_commit("a123456789abcde", "First", vec![]),
-        ];
+        let commits = create_test_commits_with_dates();
         let tree = CommitTree::new(commits);
         let theme = create_test_theme();
         let lines = format_tree_lines(tree.nodes(), 0, 10, &theme);
@@ -536,11 +528,7 @@ mod tests {
 
     #[test]
     fn test_format_tree_lines_with_offset() {
-        let commits = vec![
-            create_test_commit("c123456789abcde", "Third", vec!["b123456789abcde"]),
-            create_test_commit("b123456789abcde", "Second", vec!["a123456789abcde"]),
-            create_test_commit("a123456789abcde", "First", vec![]),
-        ];
+        let commits = create_test_commits_with_dates();
         let tree = CommitTree::new(commits);
         let theme = create_test_theme();
         let lines = format_tree_lines(tree.nodes(), 1, 10, &theme);
@@ -552,11 +540,7 @@ mod tests {
     }
     #[test]
     fn test_format_tree_lines_with_limit() {
-        let commits = vec![
-            create_test_commit("c123456789abcde", "Third", vec!["b123456789abcde"]),
-            create_test_commit("b123456789abcde", "Second", vec!["a123456789abcde"]),
-            create_test_commit("a123456789abcde", "First", vec![]),
-        ];
+        let commits = create_test_commits_with_dates();
         let tree = CommitTree::new(commits);
         let theme = create_test_theme();
         let lines = format_tree_lines(tree.nodes(), 0, 2, &theme);
@@ -564,46 +548,123 @@ mod tests {
     }
     #[test]
     fn test_tree_max_depth() {
-        let commits = vec![
-            create_test_commit("d123456789abcde", "Fourth", vec!["c123456789abcde"]),
-            create_test_commit("c123456789abcde", "Third", vec!["b123456789abcde"]),
-            create_test_commit("b123456789abcde", "Second", vec!["a123456789abcde"]),
-            create_test_commit("a123456789abcde", "First", vec![]),
-        ];
+        let commits = create_test_commits_with_dates();
         let tree = CommitTree::new(commits);
         assert!(tree.max_depth() > 0);
     }
 
     #[test]
     fn test_tree_with_merge_commit() {
+        let now = chrono::Utc::now();
         let commits = vec![
-            create_test_commit(
-                "e123456789abcde",
-                "Merge",
-                vec!["c123456789abcde", "d123456789abcde"],
-            ),
-            create_test_commit("d123456789abcde", "Feature B", vec!["b123456789abcde"]),
-            create_test_commit("c123456789abcde", "Feature A", vec!["b123456789abcde"]),
-            create_test_commit("b123456789abcde", "Second", vec!["a123456789abcde"]),
-            create_test_commit("a123456789abcde", "First", vec![]),
+            Commit {
+                hash: "e123456789abcde".to_string(),
+                short_hash: "e123456".to_string(),
+                message: "Merge commit".to_string(),
+                summary: "Merge".to_string(),
+                author: "test@example.com".to_string(),
+                email: "test@example.com".to_string(),
+                date: now - chrono::Duration::hours(1),
+                parent_hashes: vec!["c123456789abcde".to_string(), "d123456789abcde".to_string()],
+                refs: vec![],
+            },
+            Commit {
+                hash: "d123456789abcde".to_string(),
+                short_hash: "d123456".to_string(),
+                message: "Feature B".to_string(),
+                summary: "Feature B".to_string(),
+                author: "test@example.com".to_string(),
+                email: "test@example.com".to_string(),
+                date: now - chrono::Duration::hours(2),
+                parent_hashes: vec!["b123456789abcde".to_string()],
+                refs: vec![],
+            },
+            Commit {
+                hash: "c123456789abcde".to_string(),
+                short_hash: "c123456".to_string(),
+                message: "Feature A".to_string(),
+                summary: "Feature A".to_string(),
+                author: "test@example.com".to_string(),
+                email: "test@example.com".to_string(),
+                date: now - chrono::Duration::hours(3),
+                parent_hashes: vec!["b123456789abcde".to_string()],
+                refs: vec![],
+            },
+            Commit {
+                hash: "b123456789abcde".to_string(),
+                short_hash: "b123456".to_string(),
+                message: "Second commit".to_string(),
+                summary: "Second".to_string(),
+                author: "test@example.com".to_string(),
+                email: "test@example.com".to_string(),
+                date: now - chrono::Duration::hours(4),
+                parent_hashes: vec!["a123456789abcde".to_string()],
+                refs: vec![],
+            },
+            Commit {
+                hash: "a123456789abcde".to_string(),
+                short_hash: "a123456".to_string(),
+                message: "First commit".to_string(),
+                summary: "First".to_string(),
+                author: "test@example.com".to_string(),
+                email: "test@example.com".to_string(),
+                date: now - chrono::Duration::hours(5),
+                parent_hashes: vec![],
+                refs: vec![],
+            },
         ];
         let tree = CommitTree::new(commits);
         assert_eq!(tree.nodes().len(), 5);
     }
 
+    fn create_test_commits_with_dates() -> Vec<Commit> {
+        let now = chrono::Utc::now();
+        vec![
+            Commit {
+                hash: "c123456789abcde".to_string(),
+                short_hash: "c123456".to_string(),
+                message: "Third commit".to_string(),
+                summary: "Third".to_string(),
+                author: "test@example.com".to_string(),
+                email: "test@example.com".to_string(),
+                date: now - chrono::Duration::hours(1), // Most recent
+                parent_hashes: vec!["b123456789abcde".to_string()],
+                refs: vec![],
+            },
+            Commit {
+                hash: "b123456789abcde".to_string(),
+                short_hash: "b123456".to_string(),
+                message: "Second commit".to_string(),
+                summary: "Second".to_string(),
+                author: "test@example.com".to_string(),
+                email: "test@example.com".to_string(),
+                date: now - chrono::Duration::hours(2), // Middle
+                parent_hashes: vec!["a123456789abcde".to_string()],
+                refs: vec![],
+            },
+            Commit {
+                hash: "a123456789abcde".to_string(),
+                short_hash: "a123456".to_string(),
+                message: "First commit".to_string(),
+                summary: "First".to_string(),
+                author: "test@example.com".to_string(),
+                email: "test@example.com".to_string(),
+                date: now - chrono::Duration::hours(3), // Oldest
+                parent_hashes: vec![],
+                refs: vec![],
+            },
+        ]
+    }
+
     #[test]
     fn test_tree_preserves_commit_order() {
-        let commits = vec![
-            create_test_commit("c123456789abcde", "Third", vec!["b123456789abcde"]),
-            create_test_commit("b123456789abcde", "Second", vec!["a123456789abcde"]),
-            create_test_commit("a123456789abcde", "First", vec![]),
-        ];
+        let commits = create_test_commits_with_dates();
         let tree = CommitTree::new(commits);
         let nodes = tree.nodes();
         assert_eq!(nodes.len(), 3);
-        assert!(
-            nodes[0].commit.summary.contains("Third") || nodes[0].commit.summary.contains("First")
-        );
+        assert!(nodes[0].commit.summary.contains("Third"));
+        assert!(nodes[1].commit.summary.contains("Second"));
+        assert!(nodes[2].commit.summary.contains("First"));
     }
 
     #[test]
@@ -714,11 +775,7 @@ mod tests {
     }
     #[test]
     fn test_lane_index_assigned() {
-        let commits = vec![
-            create_test_commit("c123456789abcde", "Third", vec!["b123456789abcde"]),
-            create_test_commit("b123456789abcde", "Second", vec!["a123456789abcde"]),
-            create_test_commit("a123456789abcde", "First", vec![]),
-        ];
+        let commits = create_test_commits_with_dates();
         let tree = CommitTree::new(commits);
         let nodes = tree.nodes();
         assert!(!nodes.is_empty());

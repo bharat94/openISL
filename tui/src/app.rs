@@ -670,6 +670,12 @@ impl App {
                 keys: vec!["q".to_string(), "Esc".to_string()],
             },
             CommandAction {
+                name: "View Stashes".to_string(),
+                description: "Open dedicated stash management view".to_string(),
+                action: "view_stashes".to_string(),
+                keys: vec!["L".to_string()],
+            },
+            CommandAction {
                 name: "Command Palette".to_string(),
                 description: "Open command search".to_string(),
                 action: "command_palette".to_string(),
