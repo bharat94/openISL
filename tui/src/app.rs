@@ -36,6 +36,7 @@ pub enum ViewMode {
     Help,
     InputBranch,
     Search,
+    BranchSearch,
     Filter,
     Stats,
     CommandPalette,
@@ -84,6 +85,8 @@ pub struct App {
     pub search_query: String,
     pub search_results: Vec<usize>,
     pub is_searching: bool,
+    pub branch_search_query: String,
+    pub is_branch_searching: bool,
     pub is_loading: bool,
     pub tree: CommitTree,
     pub filter_mode: FilterMode,
@@ -97,6 +100,7 @@ pub struct App {
     pub selected_file_index: usize,
     pub file_scroll_offset: usize,
     pub branches: Vec<GitRef>,
+    pub all_branches: Vec<GitRef>,
     pub selected_branch_index: usize,
     pub branch_scroll_offset: usize,
     pub command_palette_input: String,
@@ -124,6 +128,12 @@ impl App {
         current_branch: String,
         repo_path: Option<std::path::PathBuf>,
     ) -> Self {
+        let all_branches = if let Some(ref path) = repo_path {
+            openisl_git::get_branches(path).unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+
         let mut app = Self {
             commits: commits.clone(),
             filtered_commits: commits.clone(),
@@ -142,6 +152,8 @@ impl App {
             search_query: String::new(),
             search_results: Vec::new(),
             is_searching: false,
+            branch_search_query: String::new(),
+            is_branch_searching: false,
             is_loading: false,
             tree: CommitTree::new(commits.clone()),
             filter_mode: FilterMode::Author,
@@ -154,7 +166,8 @@ impl App {
             files: Vec::new(),
             selected_file_index: 0,
             file_scroll_offset: 0,
-            branches: Vec::new(),
+            branches: all_branches.clone(),
+            all_branches,
             selected_branch_index: 0,
             branch_scroll_offset: 0,
             command_palette_input: String::new(),
@@ -427,6 +440,28 @@ impl App {
         self.is_searching = false;
     }
 
+    pub fn filter_branches(&mut self) {
+        if self.branch_search_query.is_empty() {
+            self.branches = self.all_branches.clone(); // Assuming all_branches holds all branches
+        } else {
+            let query = self.branch_search_query.to_lowercase();
+            self.branches = self
+                .all_branches
+                .iter()
+                .filter(|branch| branch.name.to_lowercase().contains(&query))
+                .cloned()
+                .collect();
+        }
+        self.selected_branch_index = 0;
+        self.branch_scroll_offset = 0;
+    }
+
+    pub fn clear_branch_search(&mut self) {
+        self.branch_search_query.clear();
+        self.filter_branches();
+        self.is_branch_searching = false;
+    }
+
     pub fn toggle_search(&mut self) {
         if self.is_searching && self.search_query.is_empty() {
             self.is_searching = false;
@@ -637,6 +672,7 @@ impl App {
             ViewMode::Help => self.handle_help_key(key),
             ViewMode::InputBranch => self.handle_input_key(key),
             ViewMode::Search => self.handle_search_key(key),
+            ViewMode::BranchSearch => self.handle_branch_search_key(key),
             ViewMode::Filter => self.handle_filter_key(key),
             ViewMode::Stats => self.handle_stats_key(key),
             ViewMode::CommandPalette => self.handle_command_palette_key(key),
@@ -676,8 +712,15 @@ impl App {
                 self.open_command_palette();
             }
             KeyCode::Char('/') => {
-                self.is_searching = true;
-                self.search_query.clear();
+                if self.active_panel == PanelType::Branches {
+                    self.is_branch_searching = true;
+                    self.branch_search_query.clear();
+                    self.view_mode = ViewMode::BranchSearch;
+                } else {
+                    self.is_searching = true;
+                    self.search_query.clear();
+                    self.view_mode = ViewMode::Search;
+                }
             }
             KeyCode::Char('f') => {
                 self.filter_input.clear();
@@ -984,12 +1027,12 @@ impl App {
         match key.code {
             KeyCode::Esc => {
                 self.clear_search();
+                self.view_mode = ViewMode::List; // Exit search mode
                 return false;
             }
             KeyCode::Enter => {
-                if self.search_results.is_empty() {
-                    self.clear_search();
-                }
+                // In search mode, Enter key doesn't perform search; it exits.
+                self.view_mode = ViewMode::List; // Exit search mode
                 return false;
             }
             KeyCode::Backspace => {
@@ -1006,6 +1049,33 @@ impl App {
                 if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ' ' || c == '.' {
                     self.search_query.push(c);
                     self.search();
+                }
+            }
+            _ => {}
+        }
+        false
+    }
+
+    fn handle_branch_search_key(&mut self, key: KeyEvent) -> bool {
+        match key.code {
+            KeyCode::Esc => {
+                self.clear_branch_search();
+                self.view_mode = ViewMode::List; // Exit branch search mode
+                return false;
+            }
+            KeyCode::Enter => {
+                // In search mode, Enter key doesn't perform search; it exits.
+                self.view_mode = ViewMode::List; // Exit branch search mode
+                return false;
+            }
+            KeyCode::Backspace => {
+                self.branch_search_query.pop();
+                self.filter_branches();
+            }
+            KeyCode::Char(c) => {
+                if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ' ' || c == '.' || c == '/' {
+                    self.branch_search_query.push(c);
+                    self.filter_branches();
                 }
             }
             _ => {}
@@ -1507,6 +1577,7 @@ pub fn run_tui(
             ViewMode::Help => render_help_overlay(&app, frame),
             ViewMode::InputBranch => render_input_view(&app, frame),
             ViewMode::Search => render_search_view(&app, frame),
+            ViewMode::BranchSearch => render_branch_search_input(&app, frame.size(), frame),
             ViewMode::Filter => render_filter_view(&app, frame),
             ViewMode::Stats => render_stats_view(&app, frame),
             ViewMode::CommandPalette => render_command_palette(&app, frame),
@@ -1568,7 +1639,21 @@ fn render_sidebar(app: &App, area: Rect, frame: &mut ratatui::Frame) {
 
     match app.active_panel {
         PanelType::Files => render_files_panel(app).render(chunks[2], frame.buffer_mut()),
-        PanelType::Branches => render_branches_panel(app).render(chunks[2], frame.buffer_mut()),
+        PanelType::Branches => {
+            if app.view_mode == ViewMode::BranchSearch {
+                let branch_search_chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Length(3), // For the search input
+                        Constraint::Min(10), // For the filtered branches list
+                    ])
+                    .split(chunks[2]);
+                render_branch_search_input(app, branch_search_chunks[0], frame);
+                render_branches_panel(app).render(branch_search_chunks[1], frame.buffer_mut());
+            } else {
+                render_branches_panel(app).render(chunks[2], frame.buffer_mut())
+            }
+        }
         PanelType::Commits => {
             render_commits_panel(app, chunks[2]).render(chunks[2], frame.buffer_mut())
         }
@@ -1817,77 +1902,25 @@ fn render_main_content(app: &App, area: Rect, frame: &mut ratatui::Frame) {
 }
 
 fn render_command_palette(app: &App, frame: &mut ratatui::Frame) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(5),
-            Constraint::Min(10),
-            Constraint::Length(2),
-        ])
-        .split(frame.size());
+    // ... existing content ...
+}
 
-    let title = Paragraph::new("Command Palette")
-        .style(
-            Style::default()
-                .fg(app.theme.title)
-                .add_modifier(Modifier::BOLD),
-        )
-        .alignment(Alignment::Center);
-    title.render(chunks[0], frame.buffer_mut());
-
-    let input_line = format!("> {}", app.command_palette_input);
+fn render_branch_search_input(app: &App, area: Rect, frame: &mut ratatui::Frame) {
+    let input_line = format!("/ {}", app.branch_search_query);
     let input_widget = Paragraph::new(input_line)
         .style(
             Style::default()
-                .fg(Color::Green)
+                .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         )
         .block(
             Block::default()
-                .title("Search commands")
+                .title("Branch Search")
                 .borders(Borders::ALL)
                 .border_type(BorderType::Plain)
                 .style(Style::default().fg(app.theme.border)),
         );
-    input_widget.render(chunks[1], frame.buffer_mut());
-
-    let results: Vec<ListItem> = app
-        .command_palette_results
-        .iter()
-        .take(10)
-        .enumerate()
-        .map(|(i, action)| {
-            let keys = action.keys.join(", ");
-            let content = format!("{} - {} ({})", action.name, action.description, keys);
-            let style = if i == 0 {
-                Style::default()
-                    .fg(app.theme.selected)
-                    .bg(app.theme.selected_bg)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(app.theme.text)
-            };
-            ListItem::new(Line::from(content)).style(style)
-        })
-        .collect();
-
-    let results_list = List::new(results).block(
-        Block::default()
-            .title(format!("Results ({})", app.command_palette_results.len()))
-            .borders(Borders::ALL)
-            .border_type(BorderType::Plain)
-            .style(Style::default().fg(app.theme.border)),
-    );
-    results_list.render(chunks[1], frame.buffer_mut());
-
-    let help_text = format!(
-        "Enter: Execute | ↑↓/jk: Navigate | Esc: Cancel | Theme: {}",
-        app.theme.name()
-    );
-    let help_widget = Paragraph::new(help_text)
-        .style(Style::default().fg(app.theme.help))
-        .alignment(Alignment::Center);
-    help_widget.render(chunks[2], frame.buffer_mut());
+    input_widget.render(area, frame.buffer_mut());
 }
 
 fn render_footer(app: &App, area: Rect, frame: &mut ratatui::Frame) {
@@ -3213,8 +3246,8 @@ mod tests {
 
     #[test]
     fn test_view_mode_filter_and_stats() {
-        assert_eq!(ViewMode::Filter as u8, 6);
-        assert_eq!(ViewMode::Stats as u8, 7);
+        assert_eq!(ViewMode::Filter as u8, 7);
+        assert_eq!(ViewMode::Stats as u8, 8);
     }
 
     #[test]
