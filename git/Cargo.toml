@@ -14,7 +14,7 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 serde = { workspace = true }
 chrono = { workspace = true }
+tempfile = "3.10" # Added for temporary patch file creation
 
 [dev-dependencies]
 serde_json = "1.0"
-tempfile = "3.0"

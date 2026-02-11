@@ -13,14 +13,17 @@ use crossterm::{
 };
 use openisl_git::{get_commit_diff, Commit, FileStatus, GitRef};
 use openisl_git::operations::{stash_apply, stash_drop, stash_pop, stash_show, get_stash_list, StashEntry};
+use openisl_git::operations::hunk::{Hunk, HunkLine, HunkLineType, get_file_diff_hunks, stage_hunk, unstage_hunk}; // Added for hunk staging
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    prelude::{Color, Line, Modifier, Style},
+    prelude::{Color, Line, Modifier, Style, Span},
     widgets::{Block, BorderType, Borders, List, ListItem, Paragraph, Widget},
     Terminal,
 };
+use ratatui::widgets::Clear;
 use std::io::stdout;
+use std::path::Path; // Removed PathBuf
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PanelType {
@@ -43,6 +46,7 @@ pub enum ViewMode {
     Stats,
     CommandPalette,
     Stash,
+    HunkStaging, // Added for interactive hunk staging
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -58,6 +62,7 @@ pub struct CommandAction {
     pub description: String,
     pub action: String,
     pub keys: Vec<String>,
+    pub context: Vec<String>,
 }
 
 #[derive(Debug, Default)]
@@ -112,6 +117,11 @@ pub struct App {
     pub stash_diff_content: String,
     pub command_palette_input: String,
     pub command_palette_results: Vec<CommandAction>,
+    pub hunks: Vec<openisl_git::operations::hunk::Hunk>, // Added for hunk staging
+    pub selected_hunk_index: usize, // Added for hunk staging
+    pub selected_hunk_line_index: usize, // Added for line-by-line hunk staging
+    pub is_hunk_staging_mode: bool, // Added for hunk staging
+    pub current_file_diff_output: String, // Store raw diff for hunk operations
     pub mouse_scroll_offset: usize,
     pub last_click_position: Option<(u16, u16)>,
     pub last_click_time: Option<std::time::Instant>,
@@ -183,6 +193,11 @@ impl App {
             stash_diff_content: String::new(),
             command_palette_input: String::new(),
             command_palette_results: Vec::new(),
+            hunks: Vec::new(), // Initialized
+            selected_hunk_index: 0, // Initialized
+            selected_hunk_line_index: 0, // Initialized
+            is_hunk_staging_mode: false, // Initialized
+            current_file_diff_output: String::new(), // Initialized
             mouse_scroll_offset: 0,
             last_click_position: None,
             last_click_time: None,
@@ -198,86 +213,7 @@ impl App {
     }
 
     fn populate_command_palette(&mut self) {
-        self.command_palette_results = vec![
-            CommandAction {
-                name: "Toggle Sidebar".to_string(),
-                description: "Show/hide the sidebar panel".to_string(),
-                action: "toggle_sidebar".to_string(),
-                keys: vec!["Ctrl+B".to_string()],
-            },
-            CommandAction {
-                name: "Next Panel".to_string(),
-                description: "Move focus to next panel".to_string(),
-                action: "next_panel".to_string(),
-                keys: vec!["Tab".to_string(), "→".to_string(), "l".to_string()],
-            },
-            CommandAction {
-                name: "Previous Panel".to_string(),
-                description: "Move focus to previous panel".to_string(),
-                action: "prev_panel".to_string(),
-                keys: vec!["Shift+Tab".to_string(), "←".to_string(), "h".to_string()],
-            },
-            CommandAction {
-                name: "Navigate Up".to_string(),
-                description: "Move selection up".to_string(),
-                action: "move_up".to_string(),
-                keys: vec!["k".to_string(), "↑".to_string()],
-            },
-            CommandAction {
-                name: "Navigate Down".to_string(),
-                description: "Move selection down".to_string(),
-                action: "move_down".to_string(),
-                keys: vec!["j".to_string(), "↓".to_string()],
-            },
-            CommandAction {
-                name: "Go to Start".to_string(),
-                description: "Jump to first item".to_string(),
-                action: "go_to_start".to_string(),
-                keys: vec!["gg".to_string(), "Home".to_string()],
-            },
-            CommandAction {
-                name: "Go to End".to_string(),
-                description: "Jump to last item".to_string(),
-                action: "go_to_end".to_string(),
-                keys: vec!["G".to_string(), "End".to_string()],
-            },
-            CommandAction {
-                name: "View Details".to_string(),
-                description: "Show commit/file details".to_string(),
-                action: "view_details".to_string(),
-                keys: vec!["Enter".to_string()],
-            },
-            CommandAction {
-                name: "Search".to_string(),
-                description: "Search commits or files".to_string(),
-                action: "search".to_string(),
-                keys: vec!["/".to_string()],
-            },
-            CommandAction {
-                name: "Toggle Theme".to_string(),
-                description: "Switch between dark/light theme".to_string(),
-                action: "toggle_theme".to_string(),
-                keys: vec!["t".to_string()],
-            },
-            CommandAction {
-                name: "Show Help".to_string(),
-                description: "Display keyboard shortcuts".to_string(),
-                action: "help".to_string(),
-                keys: vec!["?".to_string()],
-            },
-            CommandAction {
-                name: "Quit".to_string(),
-                description: "Exit openisl".to_string(),
-                action: "quit".to_string(),
-                keys: vec!["q".to_string(), "Esc".to_string()],
-            },
-            CommandAction {
-                name: "Command Palette".to_string(),
-                description: "Open command search".to_string(),
-                action: "command_palette".to_string(),
-                keys: vec!["Ctrl+P".to_string()],
-            },
-        ];
+        self.command_palette_results = Self::get_all_commands();
     }
 
     pub fn set_commits(&mut self, commits: Vec<Commit>) {
@@ -526,19 +462,23 @@ impl App {
     }
 
     pub fn filter_command_palette(&mut self) {
-        if self.command_palette_input.is_empty() {
-            self.command_palette_results = Self::get_all_commands();
-        } else {
-            let query = self.command_palette_input.to_lowercase();
-            self.command_palette_results = Self::get_all_commands()
-                .into_iter()
-                .filter(|action| {
-                    action.name.to_lowercase().contains(&query)
-                        || action.description.to_lowercase().contains(&query)
-                        || action.action.contains(&query)
-                })
-                .collect();
-        }
+        let all_commands = Self::get_all_commands();
+        let active_panel_str = self.panel_name().to_lowercase(); // Get the current active panel as a string
+
+        self.command_palette_results = all_commands
+            .into_iter()
+            .filter(|action| {
+                let matches_query = self.command_palette_input.is_empty()
+                    || action.name.to_lowercase().contains(&self.command_palette_input.to_lowercase())
+                    || action.description.to_lowercase().contains(&self.command_palette_input.to_lowercase())
+                    || action.action.contains(&self.command_palette_input.to_lowercase());
+
+                let matches_context = action.context.is_empty() // Command is always available
+                    || action.context.contains(&active_panel_str); // Command is available in the current panel
+
+                matches_query && matches_context
+            })
+            .collect();
     }
 
     fn get_all_commands() -> Vec<CommandAction> {
@@ -548,138 +488,189 @@ impl App {
                 description: "Show/hide the sidebar panel".to_string(),
                 action: "toggle_sidebar".to_string(),
                 keys: vec!["Ctrl+B".to_string()],
+                context: vec![], // Always available
             },
             CommandAction {
                 name: "Next Panel".to_string(),
                 description: "Move focus to next panel".to_string(),
                 action: "next_panel".to_string(),
                 keys: vec!["Tab".to_string(), "→".to_string(), "l".to_string()],
+                context: vec![], // Always available
             },
             CommandAction {
                 name: "Previous Panel".to_string(),
                 description: "Move focus to previous panel".to_string(),
                 action: "prev_panel".to_string(),
                 keys: vec!["Shift+Tab".to_string(), "←".to_string(), "h".to_string()],
+                context: vec![], // Always available
             },
             CommandAction {
                 name: "Navigate Up".to_string(),
                 description: "Move selection up".to_string(),
                 action: "move_up".to_string(),
                 keys: vec!["k".to_string(), "↑".to_string()],
+                context: vec!["files".to_string(), "branches".to_string(), "commits".to_string(), "stash".to_string()],
             },
             CommandAction {
                 name: "Navigate Down".to_string(),
                 description: "Move selection down".to_string(),
                 action: "move_down".to_string(),
                 keys: vec!["j".to_string(), "↓".to_string()],
+                context: vec!["files".to_string(), "branches".to_string(), "commits".to_string(), "stash".to_string()],
             },
             CommandAction {
                 name: "Stage/Unstage File".to_string(),
                 description: "Stage or unstage the selected file".to_string(),
                 action: "toggle_stage".to_string(),
                 keys: vec!["Space".to_string()],
+                context: vec!["files".to_string()],
             },
             CommandAction {
                 name: "Stage All".to_string(),
                 description: "Stage all files".to_string(),
                 action: "stage_all".to_string(),
                 keys: vec!["Ctrl+S".to_string()],
+                context: vec!["files".to_string()],
             },
             CommandAction {
                 name: "Unstage All".to_string(),
                 description: "Unstage all files".to_string(),
                 action: "unstage_all".to_string(),
                 keys: vec!["Ctrl+U".to_string()],
+                context: vec!["files".to_string()],
             },
             CommandAction {
                 name: "Amend Commit".to_string(),
                 description: "Amend the last commit".to_string(),
                 action: "amend".to_string(),
                 keys: vec!["A".to_string()],
+                context: vec!["commits".to_string()],
             },
             CommandAction {
                 name: "Drop Commit".to_string(),
                 description: "Remove the selected commit".to_string(),
                 action: "drop".to_string(),
                 keys: vec!["D".to_string()],
+                context: vec!["commits".to_string()],
             },
             CommandAction {
                 name: "Squash Commits".to_string(),
                 description: "Squash selected commit into previous".to_string(),
                 action: "squash".to_string(),
                 keys: vec!["S".to_string()],
+                context: vec!["commits".to_string()],
             },
             CommandAction {
                 name: "Cherry-Pick".to_string(),
                 description: "Cherry-pick the selected commit".to_string(),
                 action: "cherry_pick".to_string(),
                 keys: vec!["C".to_string()],
+                context: vec!["commits".to_string()],
             },
             CommandAction {
                 name: "Revert Commit".to_string(),
                 description: "Revert the selected commit".to_string(),
                 action: "revert".to_string(),
                 keys: vec!["R".to_string()],
+                context: vec!["commits".to_string()],
             },
             CommandAction {
                 name: "Go to Start".to_string(),
                 description: "Jump to first item".to_string(),
                 action: "go_to_start".to_string(),
                 keys: vec!["gg".to_string(), "Home".to_string()],
+                context: vec![],
             },
             CommandAction {
                 name: "Go to End".to_string(),
                 description: "Jump to last item".to_string(),
                 action: "go_to_end".to_string(),
                 keys: vec!["G".to_string(), "End".to_string()],
+                context: vec![],
             },
             CommandAction {
                 name: "View Details".to_string(),
                 description: "Show commit/file details".to_string(),
                 action: "view_details".to_string(),
                 keys: vec!["Enter".to_string()],
+                context: vec!["commits".to_string(), "files".to_string()],
             },
             CommandAction {
                 name: "Search".to_string(),
                 description: "Search commits or files".to_string(),
                 action: "search".to_string(),
                 keys: vec!["/".to_string()],
+                context: vec!["commits".to_string(), "files".to_string(), "branches".to_string()],
             },
             CommandAction {
                 name: "Toggle Theme".to_string(),
                 description: "Switch between dark/light theme".to_string(),
                 action: "toggle_theme".to_string(),
                 keys: vec!["t".to_string()],
+                context: vec![], // Always available
             },
             CommandAction {
                 name: "Toggle Mouse Mode".to_string(),
                 description: "Enable/disable mouse support".to_string(),
                 action: "toggle_mouse".to_string(),
                 keys: vec!["m".to_string()],
+                context: vec![], // Always available
             },
             CommandAction {
                 name: "Show Help".to_string(),
                 description: "Display keyboard shortcuts".to_string(),
                 action: "help".to_string(),
                 keys: vec!["?".to_string()],
+                context: vec![], // Always available
             },
             CommandAction {
                 name: "Quit".to_string(),
                 description: "Exit openisl".to_string(),
                 action: "quit".to_string(),
                 keys: vec!["q".to_string(), "Esc".to_string()],
+                context: vec![], // Always available
             },
             CommandAction {
                 name: "View Stashes".to_string(),
                 description: "Open dedicated stash management view".to_string(),
                 action: "view_stashes".to_string(),
                 keys: vec!["L".to_string()],
+                context: vec!["commits".to_string()], // Stashes are typically related to the commit history
+            },
+            CommandAction {
+                name: "Apply Stash".to_string(),
+                description: "Apply selected stash".to_string(),
+                action: "apply_stash".to_string(),
+                keys: vec!["A".to_string()],
+                context: vec!["stash".to_string()],
+            },
+            CommandAction {
+                name: "Drop Stash".to_string(),
+                description: "Drop selected stash".to_string(),
+                action: "drop_stash".to_string(),
+                keys: vec!["D".to_string()],
+                context: vec!["stash".to_string()],
+            },
+            CommandAction {
+                name: "Pop Stash".to_string(),
+                description: "Pop selected stash (apply and drop)".to_string(),
+                action: "pop_stash".to_string(),
+                keys: vec!["P".to_string()],
+                context: vec!["stash".to_string()],
+            },
+            CommandAction {
+                name: "Open in Editor".to_string(),
+                description: "Open selected file in external editor".to_string(),
+                action: "open_in_editor".to_string(),
+                keys: vec!["E".to_string()],
+                context: vec!["files".to_string()],
             },
             CommandAction {
                 name: "Command Palette".to_string(),
                 description: "Open command search".to_string(),
                 action: "command_palette".to_string(),
                 keys: vec!["Ctrl+P".to_string()],
+                context: vec![], // Always available
             },
         ]
     }
@@ -697,6 +688,7 @@ impl App {
             ViewMode::Stats => self.handle_stats_key(key),
             ViewMode::CommandPalette => self.handle_command_palette_key(key),
             ViewMode::Stash => self.handle_stash_key(key),
+            ViewMode::HunkStaging => self.handle_hunk_staging_key(key), // Handle hunk staging mode
         }
     }
 
@@ -810,187 +802,128 @@ impl App {
         false
     }
 
-    fn handle_filter_key(&mut self, key: KeyEvent) -> bool {
+    fn handle_hunk_staging_key(&mut self, key: KeyEvent) -> bool {
         match key.code {
             KeyCode::Esc => {
-                self.clear_filter();
-                self.view_mode = ViewMode::List;
-                self.status_message.clear();
-                return false;
-            }
-            KeyCode::Enter => {
-                self.apply_filter();
-                self.status_message = format!("Filter: {} commits", self.filtered_commits.len());
-                self.view_mode = ViewMode::List;
-                return false;
-            }
-            KeyCode::Backspace => {
-                self.filter_input.pop();
-            }
-            KeyCode::Char('a') => {
-                self.filter_mode = FilterMode::Author;
-                self.status_message = "Filtering by author...".to_string();
-            }
-            KeyCode::Char('m') => {
-                self.filter_mode = FilterMode::Message;
-                self.status_message = "Filtering by message...".to_string();
-            }
-            KeyCode::Char('d') => {
-                self.filter_mode = FilterMode::Date;
-                self.status_message = "Filtering by date (YYYY-MM-DD)...".to_string();
-            }
-            KeyCode::Char(c) => {
-                if c.is_ascii_alphanumeric()
-                    || c == '-'
-                    || c == '_'
-                    || c == ' '
-                    || c == '.'
-                    || c == '@'
-                {
-                    self.filter_input.push(c);
-                }
-            }
-            _ => {}
-        }
-        false
-    }
-
-    fn handle_stats_key(&mut self, key: KeyEvent) -> bool {
-        match key.code {
-            KeyCode::Char('q') | KeyCode::Esc | KeyCode::Enter => {
-                self.view_mode = ViewMode::List;
-            }
-            _ => {}
-        }
-        false
-    }
-
-    fn handle_command_palette_key(&mut self, key: KeyEvent) -> bool {
-        match key.code {
-            KeyCode::Esc => {
-                self.view_mode = ViewMode::List;
-                self.status_message.clear();
-                return false;
-            }
-            KeyCode::Enter => {
-                if !self.command_palette_results.is_empty() {
-                    let action = self.command_palette_results[0].action.clone();
-                    self.execute_command(&action);
-                }
-                self.view_mode = ViewMode::List;
-                self.status_message.clear();
-                return false;
-            }
-            KeyCode::Backspace => {
-                self.command_palette_input.pop();
-                self.filter_command_palette();
-            }
-            KeyCode::Char(c) => {
-                self.command_palette_input.push(c);
-                self.filter_command_palette();
-            }
-            KeyCode::Up => {
-                if !self.command_palette_results.is_empty() {
-                    self.command_palette_results.rotate_right(1);
-                }
-            }
-            KeyCode::Down => {
-                if !self.command_palette_results.is_empty() {
-                    self.command_palette_results.rotate_left(1);
-                }
-            }
-            _ => {}
-        }
-        false
-    }
-
-    fn handle_stash_key(&mut self, key: KeyEvent) -> bool {
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => {
-                self.view_mode = ViewMode::List;
-                self.stash_diff_content.clear();
-                return false;
+                self.is_hunk_staging_mode = false;
+                self.view_mode = ViewMode::Diff; // Exit hunk staging mode
+                self.status_message = "Exited hunk staging mode".to_string();
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                if self.selected_stash_index < self.stashes.len().saturating_sub(1) {
-                    self.selected_stash_index += 1;
-                    if self.selected_stash_index >= self.stash_scroll_offset + 10 {
-                        self.stash_scroll_offset = self.selected_stash_index - 10 + 1;
-                    }
-                    if let Some(stash) = self.stashes.get(self.selected_stash_index) {
-                        let stash_name = stash.name.clone();
-                    self.fetch_stash_diff(&stash_name);
+                // Move down to next line or next hunk
+                if let Some(hunk) = self.hunks.get(self.selected_hunk_index) {
+                    if self.selected_hunk_line_index < hunk.lines.len().saturating_sub(1) {
+                        self.selected_hunk_line_index += 1;
+                    } else if self.selected_hunk_index < self.hunks.len().saturating_sub(1) {
+                        self.selected_hunk_index += 1;
+                        self.selected_hunk_line_index = 0; // Reset line selection for new hunk
                     }
                 }
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                if self.selected_stash_index > 0 {
-                    self.selected_stash_index = self.selected_stash_index.saturating_sub(1);
-                    if self.selected_stash_index < self.stash_scroll_offset {
-                        self.stash_scroll_offset = self.selected_stash_index.saturating_sub(1);
+                // Move up to previous line or previous hunk
+                if self.selected_hunk_line_index > 0 {
+                    self.selected_hunk_line_index -= 1;
+                } else if self.selected_hunk_index > 0 {
+                    self.selected_hunk_index -= 1;
+                    // Move to the last line of the previous hunk
+                    if let Some(hunk) = self.hunks.get(self.selected_hunk_index) {
+                        self.selected_hunk_line_index = hunk.lines.len().saturating_sub(1);
                     }
-                    if let Some(stash) = self.stashes.get(self.selected_stash_index) {
-                        let stash_name = stash.name.clone();
-                    self.fetch_stash_diff(&stash_name);
+                }
+            }
+            KeyCode::Char(' ') => {
+                // Toggle selection of the current line or hunk
+                if let Some(hunk) = self.hunks.get_mut(self.selected_hunk_index) {
+                    if let Some(line) = hunk.lines.get_mut(self.selected_hunk_line_index) {
+                        line.is_selected = !line.is_selected;
+                        self.status_message = format!(
+                            "Line {} in hunk {} selection toggled",
+                            self.selected_hunk_line_index, self.selected_hunk_index
+                        );
                     }
                 }
             }
-            KeyCode::Enter => {
-                if let Some(stash) = self.stashes.get(self.selected_stash_index) {
-                    let stash_name = stash.name.clone();
-                    self.fetch_stash_diff(&stash_name);
-                }
+            KeyCode::Char('s') => {
+                // Stage selected lines/hunks
+                self.stage_selected_hunks_or_lines();
             }
-            KeyCode::Char('a') => {
-                if let Some(stash) = self.stashes.get(self.selected_stash_index) {
-                    let stash_name = stash.name.clone();
-                    self.apply_stash(Some(&stash_name));
-                }
-            }
-            KeyCode::Char('d') => {
-                if let Some(stash) = self.stashes.get(self.selected_stash_index) {
-                    let stash_name = stash.name.clone();
-                    self.drop_stash(Some(&stash_name));
-                }
-            }
-            KeyCode::Char('p') => {
-                if let Some(stash) = self.stashes.get(self.selected_stash_index) {
-                    let stash_name = stash.name.clone();
-                    self.pop_stash(Some(&stash_name));
-                }
+            KeyCode::Char('u') => {
+                // Unstage selected lines/hunks
+                self.unstage_selected_hunks_or_lines();
             }
             _ => {}
         }
         false
     }
 
-    fn execute_command(&mut self, action: &str) {
-        match action {
-            "toggle_sidebar" => self.toggle_sidebar(),
-            "next_panel" => self.next_panel(),
-            "prev_panel" => self.prev_panel(),
-            "move_up" => self.move_up(),
-            "move_down" => self.move_down(),
-            "go_to_start" => self.go_to_start(),
-            "go_to_end" => self.go_to_end(),
-            "view_details" => self.view_mode = ViewMode::Details,
-            "search" => {
-                self.is_searching = true;
-                self.search_query.clear();
+    pub fn stage_selected_hunks_or_lines(&mut self) {
+        if let Some(repo_path) = &self.repo_path {
+            if let Some(file) = self.files.get(self.selected_file_index) {
+                // Iterate through hunks and lines to stage selected ones
+                for (hunk_idx, hunk) in self.hunks.iter_mut().enumerate() {
+                    if hunk.is_selected {
+                        // Stage entire hunk
+                        if let Err(e) = stage_hunk(repo_path, Path::new(&file.path), hunk_idx, &self.current_file_diff_output) {
+                            self.status_message = format!("Error staging hunk: {}", e);
+                            return;
+                        }
+                    } else {
+                        // Stage selected lines within the hunk
+                        let selected_lines: Vec<&HunkLine> = hunk.lines.iter().filter(|l| l.is_selected).collect();
+                        if !selected_lines.is_empty() {
+                            // This would require a more complex partial staging mechanism in git operations
+                            // For simplicity, if any line is selected, we'll try to stage the hunk
+                            // A more robust solution would involve creating a patch for only the selected lines.
+                            if let Err(e) = stage_hunk(repo_path, Path::new(&file.path), hunk_idx, &self.current_file_diff_output) {
+                                self.status_message = format!("Error staging selected lines: {}", e);
+                                return;
+                            }
+                        }
+                    }
+                }
+                self.status_message = "Staged selected changes".to_string();
+                self.fetch_diff(); // Refresh diff to show updated status
+                self.refresh_files(); // Refresh files panel as well
+            } else {
+                self.status_message = "No file selected to stage hunks".to_string();
             }
-            "toggle_stage" => self.toggle_file_stage(),
-            "stage_all" => self.stage_all_files(),
-            "unstage_all" => self.unstage_all_files(),
-            "amend" => self.amend_commit(),
-            "drop" => self.drop_commit(),
-            "squash" => self.squash_commits(),
-            "cherry_pick" => self.cherry_pick_commit(),
-            "revert" => self.revert_commit(),
-            "toggle_theme" => self.theme.next(),
-            "toggle_mouse" => self.toggle_mouse_mode(),
-            "help" => self.view_mode = ViewMode::Help,
-            "quit" => {}
-            _ => {}
+        } else {
+            self.status_message = "No repository path available".to_string();
+        }
+    }
+
+    pub fn unstage_selected_hunks_or_lines(&mut self) {
+        if let Some(repo_path) = &self.repo_path {
+            if let Some(file) = self.files.get(self.selected_file_index) {
+                // Iterate through hunks and lines to unstage selected ones
+                for (hunk_idx, hunk) in self.hunks.iter_mut().enumerate() {
+                    if hunk.is_selected {
+                        // Unstage entire hunk
+                        if let Err(e) = unstage_hunk(repo_path, Path::new(&file.path), hunk_idx, &self.current_file_diff_output) {
+                            self.status_message = format!("Error unstaging hunk: {}", e);
+                            return;
+                        }
+                    } else {
+                        // Unstage selected lines within the hunk
+                        let selected_lines: Vec<&HunkLine> = hunk.lines.iter().filter(|l| l.is_selected).collect();
+                        if !selected_lines.is_empty() {
+                            // Similar to staging, this would require a more complex partial unstaging mechanism
+                            if let Err(e) = unstage_hunk(repo_path, Path::new(&file.path), hunk_idx, &self.current_file_diff_output) {
+                                self.status_message = format!("Error unstaging selected lines: {}", e);
+                                return;
+                            }
+                        }
+                    }
+                }
+                self.status_message = "Unstaged selected changes".to_string();
+                self.fetch_diff(); // Refresh diff to show updated status
+                self.refresh_files(); // Refresh files panel as well
+            } else {
+                self.status_message = "No file selected to unstage hunks".to_string();
+            }
+        } else {
+            self.status_message = "No repository path available".to_string();
         }
     }
 
@@ -1229,6 +1162,15 @@ impl App {
         match key.code {
             KeyCode::Char('q') | KeyCode::Esc => self.view_mode = ViewMode::List,
             KeyCode::Char('?') => self.view_mode = ViewMode::Help,
+            KeyCode::Char('i') => {
+                if self.active_panel == PanelType::Files && !self.hunks.is_empty() {
+                    self.is_hunk_staging_mode = true;
+                    self.view_mode = ViewMode::HunkStaging;
+                    self.status_message = "Hunk staging mode (j/k to navigate, Space to select, s to stage, u to unstage)".to_string();
+                } else {
+                    self.status_message = "Select a file with diffs to enter hunk staging mode".to_string();
+                }
+            }
             _ => {}
         }
         false
@@ -1304,28 +1246,80 @@ impl App {
 
     pub fn fetch_diff(&mut self) {
         self.is_loading = true;
-        if let Some(commit) = self.selected_commit() {
+        self.hunks.clear(); // Clear previous hunks
+        self.current_file_diff_output.clear(); // Clear previous diff output
+
+        if let Some(file) = self.files.get(self.selected_file_index) {
             if let Some(ref repo_path) = self.repo_path {
-                match get_commit_diff(repo_path, &commit.hash) {
+                // Get diff for the selected file (either staged or unstaged)
+                let staged_hunks_result = get_file_diff_hunks(repo_path, Path::new(&file.path), true);
+                let unstaged_hunks_result = get_file_diff_hunks(repo_path, Path::new(&file.path), false);
+
+                match (staged_hunks_result, unstaged_hunks_result) {
+                    (Ok(staged_hunks), Ok(mut unstaged_hunks)) => {
+                        // For simplicity, combine staged and unstaged hunks
+                        // In a real scenario, you might want to show them separately
+                        // or indicate their status more clearly.
+                        self.hunks = staged_hunks;
+                        self.hunks.append(&mut unstaged_hunks);
+                        // Store the full diff output if needed, or re-fetch it when a hunk operation is performed
+                        // For now, let's keep diff_content for display and hunks for interactive staging
+                        // self.diff_content = ... (re-generate full diff from hunks or git show/diff)
+                        self.status_message = format!("Fetched diff for {}", file.path);
+                    }
+                    (Err(e), _) | (_, Err(e)) => {
+                        self.status_message = format!("Error fetching hunks for {}: {}", file.path, e);
+                    }
+                }
+
+                // Also update the general diff_content for the Diff View if still used
+                let file_path_str = file.path.clone(); // Clone to own the String and avoid borrow issues
+                match openisl_git::get_diff(repo_path, Some(&file_path_str), false) { // Corrected: Path::new(&file.path) to &file.path
                     Ok(diff) => {
                         self.diff_content = diff;
-                        self.parse_diff();
-                        self.is_loading = false;
+                        self.current_file_diff_output = self.diff_content.clone(); // Store raw diff
+                        self.parse_diff(); // Parse to get stats
                     }
                     Err(e) => {
-                        self.diff_content = format!("Error fetching diff: {}", e);
+                        self.diff_content = format!("Error fetching full diff: {}", e);
+                        self.current_file_diff_output = self.diff_content.clone();
                         self.parse_diff();
-                        self.is_loading = false;
                     }
                 }
             } else {
                 self.diff_content = "No repository path available".to_string();
+                self.status_message = self.diff_content.clone();
                 self.parse_diff();
-                self.is_loading = false;
+            }
+        } else if let Some(commit) = self.selected_commit() {
+            let commit_hash = commit.hash.clone(); // Clone to end borrow of self
+            let commit_short_hash = commit.short_hash.clone(); // Clone to end borrow of self
+            if let Some(ref repo_path) = self.repo_path {
+                match get_commit_diff(repo_path, &commit_hash) {
+                    Ok(diff) => {
+                        self.diff_content = diff;
+                        self.current_file_diff_output = self.diff_content.clone();
+                        self.parse_diff();
+                        self.hunks.clear(); // No hunks for commit diff for now
+                        self.status_message = format!("Fetched diff for commit {}", commit_short_hash); // Use cloned short_hash
+                    }
+                    Err(e) => {
+                        self.diff_content = format!("Error fetching diff: {}", e);
+                        self.current_file_diff_output = self.diff_content.clone();
+                        self.parse_diff();
+                    }
+                }
+            } else {
+                self.diff_content = "No repository path available".to_string();
+                self.status_message = self.diff_content.clone();
+                self.parse_diff();
             }
         } else {
+            self.diff_content = "No file or commit selected for diff".to_string();
+            self.status_message = self.diff_content.clone();
             self.is_loading = false;
         }
+        self.is_loading = false;
     }
 
     pub fn refresh_files(&mut self) {
@@ -1726,6 +1720,238 @@ impl App {
             self.is_loading = false;
         }
     }
+
+    fn handle_filter_key(&mut self, key: KeyEvent) -> bool {
+        match key.code {
+            KeyCode::Esc => {
+                self.clear_filter();
+                self.view_mode = ViewMode::List;
+                self.status_message.clear();
+                return false;
+            }
+            KeyCode::Enter => {
+                self.apply_filter();
+                self.status_message = format!("Filter: {} commits", self.filtered_commits.len());
+                self.view_mode = ViewMode::List;
+                return false;
+            }
+            KeyCode::Backspace => {
+                self.filter_input.pop();
+            }
+            KeyCode::Char('a') => {
+                self.filter_mode = FilterMode::Author;
+                self.status_message = "Filtering by author...".to_string();
+            }
+            KeyCode::Char('m') => {
+                self.filter_mode = FilterMode::Message;
+                self.status_message = "Filtering by message...".to_string();
+            }
+            KeyCode::Char('d') => {
+                self.filter_mode = FilterMode::Date;
+                self.status_message = "Filtering by date (YYYY-MM-DD)...".to_string();
+            }
+            KeyCode::Char(c) => {
+                if c.is_ascii_alphanumeric()
+                    || c == '-'
+                    || c == '_'
+                    || c == ' '
+                    || c == '.'
+                    || c == '@'
+                {
+                    self.filter_input.push(c);
+                }
+            }
+            _ => {}
+        }
+        false
+    }
+
+    fn handle_stats_key(&mut self, key: KeyEvent) -> bool {
+        match key.code {
+            KeyCode::Char('q') | KeyCode::Esc | KeyCode::Enter => {
+                self.view_mode = ViewMode::List;
+            }
+            _ => {}
+        }
+        false
+    }
+
+    fn handle_command_palette_key(&mut self, key: KeyEvent) -> bool {
+        match key.code {
+            KeyCode::Esc => {
+                self.view_mode = ViewMode::List;
+                self.status_message.clear();
+                return false;
+            }
+            KeyCode::Enter => {
+                if !self.command_palette_results.is_empty() {
+                    let action = self.command_palette_results[0].action.clone();
+                    self.execute_command(&action);
+                }
+                self.view_mode = ViewMode::List;
+                self.status_message.clear();
+                return false;
+            }
+            KeyCode::Backspace => {
+                self.command_palette_input.pop();
+                self.filter_command_palette();
+            }
+            KeyCode::Char(c) => {
+                self.command_palette_input.push(c);
+                self.filter_command_palette();
+            }
+            KeyCode::Up => {
+                if !self.command_palette_results.is_empty() {
+                    self.command_palette_results.rotate_right(1);
+                }
+            }
+            KeyCode::Down => {
+                if !self.command_palette_results.is_empty() {
+                    self.command_palette_results.rotate_left(1);
+                }
+            }
+            _ => {}
+        }
+        false
+    }
+
+    fn handle_stash_key(&mut self, key: KeyEvent) -> bool {
+        match key.code {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                self.view_mode = ViewMode::List;
+                self.stash_diff_content.clear();
+                return false;
+            }
+            KeyCode::Char('j') | KeyCode::Down => {
+                if self.selected_stash_index < self.stashes.len().saturating_sub(1) {
+                    self.selected_stash_index += 1;
+                    if self.selected_stash_index >= self.stash_scroll_offset + 10 {
+                        self.stash_scroll_offset = self.selected_stash_index - 10 + 1;
+                    }
+                    if let Some(stash) = self.stashes.get(self.selected_stash_index) {
+                        let stash_name = stash.name.clone();
+                    self.fetch_stash_diff(&stash_name);
+                    }
+                }
+            }
+            KeyCode::Char('k') | KeyCode::Up => {
+                if self.selected_stash_index > 0 {
+                    self.selected_stash_index = self.selected_stash_index.saturating_sub(1);
+                    if self.selected_stash_index < self.stash_scroll_offset {
+                        self.stash_scroll_offset = self.selected_stash_index.saturating_sub(1);
+                    }
+                    if let Some(stash) = self.stashes.get(self.selected_stash_index) {
+                        let stash_name = stash.name.clone();
+                    self.fetch_stash_diff(&stash_name);
+                    }
+                }
+            }
+            KeyCode::Enter => {
+                if let Some(stash) = self.stashes.get(self.selected_stash_index) {
+                    let stash_name = stash.name.clone();
+                    self.fetch_stash_diff(&stash_name);
+                }
+            }
+            KeyCode::Char('a') => {
+                if let Some(stash) = self.stashes.get(self.selected_stash_index) {
+                    let stash_name = stash.name.clone();
+                    self.apply_stash(Some(&stash_name));
+                }
+            }
+            KeyCode::Char('d') => {
+                if let Some(stash) = self.stashes.get(self.selected_stash_index) {
+                    let stash_name = stash.name.clone();
+                    self.drop_stash(Some(&stash_name));
+                }
+            }
+            KeyCode::Char('p') => {
+                if let Some(stash) = self.stashes.get(self.selected_stash_index) {
+                    let stash_name = stash.name.clone();
+                    self.pop_stash(Some(&stash_name));
+                }
+            }
+            _ => {}
+        }
+        false
+    }
+
+    fn execute_command(&mut self, action: &str) {
+        match action {
+            "toggle_sidebar" => self.toggle_sidebar(),
+            "next_panel" => self.next_panel(),
+            "prev_panel" => self.prev_panel(),
+            "move_up" => {
+                match self.active_panel {
+                    PanelType::Commits => self.move_up(),
+                    PanelType::Files => self.move_file_selection_up(),
+                    PanelType::Branches => {
+                        if self.selected_branch_index > 0 {
+                            self.selected_branch_index -= 1;
+                        }
+                    }
+                    PanelType::Stash => { let _ = self.handle_stash_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE)); },
+                }
+            },
+            "move_down" => {
+                match self.active_panel {
+                    PanelType::Commits => self.move_down(),
+                    PanelType::Files => self.move_file_selection_down(),
+                    PanelType::Branches => {
+                        if self.selected_branch_index < self.branches.len().saturating_sub(1) {
+                            self.selected_branch_index += 1;
+                        }
+                    }
+                    PanelType::Stash => { let _ = self.handle_stash_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)); },
+                }
+            },
+            "go_to_start" => self.go_to_start(),
+            "go_to_end" => self.go_to_end(),
+            "view_details" => self.view_mode = ViewMode::Details,
+            "search" => {
+                self.is_searching = true;
+                self.search_query.clear();
+                self.view_mode = ViewMode::Search;
+            }
+            "toggle_stage" => self.toggle_file_stage(),
+            "stage_all" => self.stage_all_files(),
+            "unstage_all" => self.unstage_all_files(),
+            "amend" => self.amend_commit(),
+            "drop" => self.drop_commit(),
+            "squash" => self.squash_commits(),
+            "cherry_pick" => self.cherry_pick_commit(),
+            "revert" => self.revert_commit(),
+            "toggle_theme" => self.theme.next(),
+            "toggle_mouse" => self.toggle_mouse_mode(),
+            "help" => self.view_mode = ViewMode::Help,
+            "quit" => {} // This would typically return a signal to quit the app
+            "command_palette" => self.open_command_palette(),
+            "view_stashes" => {
+                self.refresh_stashes();
+                self.view_mode = ViewMode::Stash;
+            },
+            "apply_stash" => {
+                if let Some(stash) = self.stashes.get(self.selected_stash_index) {
+                    let stash_name = stash.name.clone();
+                    self.apply_stash(Some(&stash_name));
+                }
+            },
+            "drop_stash" => {
+                if let Some(stash) = self.stashes.get(self.selected_stash_index) {
+                    let stash_name = stash.name.clone();
+                    self.drop_stash(Some(&stash_name));
+                }
+            },
+            "pop_stash" => {
+                if let Some(stash) = self.stashes.get(self.selected_stash_index) {
+                    let stash_name = stash.name.clone();
+                    self.pop_stash(Some(&stash_name));
+                }
+            },
+            _ => {
+                self.status_message = format!("Unknown command: {}", action);
+            }
+        }
+    }
 }
 
 fn get_spinner_char() -> char {
@@ -1763,6 +1989,7 @@ pub fn run_tui(
             ViewMode::Stats => render_stats_view(&app, frame),
             ViewMode::CommandPalette => render_command_palette(&app, frame),
             ViewMode::Stash => render_stash_view(&app, frame),
+            ViewMode::HunkStaging => render_hunk_staging_view(&app, frame), // Render hunk staging view
         })?;
 
         if event::poll(std::time::Duration::from_millis(50))? {
@@ -1974,7 +2201,7 @@ fn render_commits_panel(app: &App, area: Rect) -> impl Widget + '_ {
     let visible_count = panel_height.max(1);
     let raw_lines = format_tree_lines(app.tree.nodes(), app.scroll_offset, visible_count, &app.theme);
 
-    let lines: Vec<ListItem<'_>> = raw_lines
+    let items: Vec<ListItem<'_>> = raw_lines // Corrected: assign to items
         .into_iter()
         .enumerate()
         .map(|(i, line)| {
@@ -1995,12 +2222,12 @@ fn render_commits_panel(app: &App, area: Rect) -> impl Widget + '_ {
         })
         .collect();
 
-    let list = List::new(lines).block(
+    let list = List::new(items).block(
         Block::default()
             .title(format!(
                 "Commits ({}/{})",
                 app.selected_index + 1,
-                app.commits.len()
+                app.commits.len(),
             ))
             .borders(Borders::ALL)
             .border_type(BorderType::Plain)
@@ -2087,7 +2314,59 @@ fn render_main_content(app: &App, area: Rect, frame: &mut ratatui::Frame) {
 }
 
 fn render_command_palette(app: &App, frame: &mut ratatui::Frame) {
-    // ... existing content ...
+    // Determine the size of the command palette overlay
+    let size = frame.size();
+    let width = size.width.saturating_sub(4);
+    let height = size.height.saturating_sub(4);
+    let area = Rect::new(2, 2, width, height);
+
+    let block = Block::default()
+        .title("Command Palette")
+        .borders(Borders::ALL)
+        .border_type(BorderType::Thick)
+        .border_style(Style::default().fg(app.theme.command_palette_border))
+        .style(Style::default().bg(app.theme.command_palette_bg));
+    frame.render_widget(Clear, area); // This clears out the background
+    frame.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(3), Constraint::Min(1), Constraint::Length(1)])
+        .margin(1)
+        .split(area);
+
+    // Render input
+    let input_text = format!("/{}", app.command_palette_input);
+    let input_widget = Paragraph::new(input_text)
+        .style(Style::default().fg(app.theme.command_palette_input_fg))
+        .block(Block::default().borders(Borders::BOTTOM).border_style(Style::default().fg(app.theme.command_palette_input_border)));
+    frame.render_widget(input_widget, chunks[0]);
+
+    // Render results
+    let items: Vec<ListItem<'_>> = app
+        .command_palette_results
+        .iter()
+        .map(|cmd| {
+            let keys_str = if cmd.keys.is_empty() {
+                String::new()
+            } else {
+                format!(" ({})", cmd.keys.join(", "))
+            };
+            let content = format!("{} - {}{}", cmd.name, cmd.description, keys_str);
+            ListItem::new(Line::from(content)).style(Style::default().fg(app.theme.command_palette_item_fg))
+        })
+        .collect();
+
+    let list = List::new(items)
+        .block(Block::default())
+        .highlight_style(
+            Style::default()
+                .bg(app.theme.command_palette_selected_bg)
+                .fg(app.theme.command_palette_selected_fg)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol(">> ");
+    frame.render_widget(list, chunks[1]);
 }
 
 fn render_branch_search_input(app: &App, area: Rect, frame: &mut ratatui::Frame) {
@@ -2162,6 +2441,90 @@ fn render_stash_view(app: &App, frame: &mut ratatui::Frame) {
     frame.render_widget(diff_text, chunks[1]);
 
     render_footer(app, frame.size(), frame);
+}
+
+fn render_hunk_staging_view(app: &App, frame: &mut ratatui::Frame) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Min(10),
+            Constraint::Length(2),
+        ])
+        .split(frame.size());
+
+    let file_name = if let Some(file) = app.files.get(app.selected_file_index) {
+        file.path.clone()
+    } else {
+        "No file selected".to_string()
+    };
+
+    let title = Paragraph::new(format!("Hunk Staging: {}", file_name))
+        .style(
+            Style::default()
+                .fg(app.theme.title)
+                .add_modifier(Modifier::BOLD),
+        )
+        .alignment(Alignment::Center);
+    title.render(chunks[0], frame.buffer_mut());
+
+    let mut lines: Vec<Line> = Vec::new();
+    for (hunk_idx, hunk) in app.hunks.iter().enumerate() {
+        let hunk_header = format!("Hunk {}/{}", hunk_idx + 1, app.hunks.len());
+        lines.push(Line::from(hunk_header).style(Style::default().fg(app.theme.hunk_header).add_modifier(Modifier::BOLD)));
+
+        for (line_idx, line) in hunk.lines.iter().enumerate() {
+            let mut style = Style::default();
+            let prefix = match line.line_type {
+                HunkLineType::Addition => { // Corrected variant name
+                    style = style.fg(app.theme.diff_added);
+                    "+"
+                }
+                HunkLineType::Deletion => { // Corrected variant name
+                    style = style.fg(app.theme.diff_removed);
+                    "-"
+                }
+                HunkLineType::Context => {
+                    style = style.fg(app.theme.diff_context);
+                    " "
+                }
+            };
+
+            // Highlight selected line for navigation
+            if hunk_idx == app.selected_hunk_index && line_idx == app.selected_hunk_line_index {
+                style = style.bg(app.theme.selected_bg).add_modifier(Modifier::BOLD);
+            }
+
+            // Indicate selected lines for staging/unstaging
+            let selection_indicator = if line.is_selected { "*" } else { " " };
+
+            lines.push(Line::from(vec![
+                Span::styled(format!("{} {}", selection_indicator, prefix), style),
+                Span::styled(line.content.clone(), style),
+            ]));
+        }
+    }
+
+    let hunk_list = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .title("Hunks")
+                .borders(Borders::ALL)
+                .border_type(BorderType::Plain)
+                .style(Style::default().fg(app.theme.border)),
+        )
+        .wrap(ratatui::widgets::Wrap { trim: false });
+
+    frame.render_widget(hunk_list, chunks[1]);
+
+    let help_text = format!(
+        "j/k: Navigate lines | Space: Toggle selection | s: Stage selected | u: Unstage selected | Esc: Exit | Theme: {}",
+        app.theme.name()
+    );
+    let help_widget = Paragraph::new(help_text)
+        .style(Style::default().fg(app.theme.help))
+        .alignment(Alignment::Center);
+    help_widget.render(chunks[2], frame.buffer_mut());
 }
 
 fn render_footer(app: &App, area: Rect, frame: &mut ratatui::Frame) {
@@ -2715,6 +3078,7 @@ Top Contributors:
 mod tests {
     use super::*;
     use ratatui::style::Color;
+    use openisl_git::operations::hunk::HunkLineType; // Added explicitly for tests
 
     fn create_test_commits() -> Vec<Commit> {
         vec![
@@ -2752,6 +3116,193 @@ mod tests {
                 refs: vec![],
             },
         ]
+    }
+
+    fn mock_hunks() -> Vec<Hunk> {
+        vec![
+            Hunk {
+                header: "@@ -1,3 +1,4 @@".to_string(),
+                old_start: 1,
+                old_lines: 3,
+                new_start: 1,
+                new_lines: 4,
+                lines: vec![
+                    HunkLine {
+                        content: "line1".to_string(),
+                        line_type: HunkLineType::Context, // Full path
+                        is_selected: false,
+                    },
+                    HunkLine {
+                        content: "line2_removed".to_string(),
+                        line_type: HunkLineType::Deletion, // Corrected variant name
+                        is_selected: false,
+                    },
+                    HunkLine {
+                        content: "line2_added".to_string(),
+                        line_type: HunkLineType::Addition, // Corrected variant name
+                        is_selected: false,
+                    },
+                    HunkLine {
+                        content: "line3".to_string(),
+                        line_type: HunkLineType::Context, // Full path
+                        is_selected: false,
+                    },
+                ],
+                is_selected: false,
+                is_staged: false, // Added missing field
+            },
+            Hunk {
+                header: "@@ -5,2 +5,2 @@".to_string(),
+                old_start: 5,
+                old_lines: 2,
+                new_start: 5,
+                new_lines: 2,
+                lines: vec![
+                    HunkLine {
+                        content: "line5_removed".to_string(),
+                        line_type: HunkLineType::Deletion, // Corrected variant name
+                        is_selected: false,
+                    },
+                    HunkLine {
+                        content: "line5_added".to_string(),
+                        line_type: HunkLineType::Addition, // Corrected variant name
+                        is_selected: false,
+                    },
+                ],
+                is_selected: false,
+                is_staged: false, // Added missing field
+            },
+        ]
+    }
+
+    #[test]
+    fn test_hunk_staging_mode_entry_exit() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+        app.files = vec![
+            FileStatus {
+                path: "test.rs".to_string(),
+                status: openisl_git::StatusType::Modified,
+            },
+        ];
+        app.active_panel = PanelType::Files;
+        app.hunks = mock_hunks();
+
+        // Simulate entering diff view
+        app.view_mode = ViewMode::Diff;
+        assert_eq!(app.view_mode, ViewMode::Diff);
+
+        // Simulate pressing 'i' to enter hunk staging mode
+        app.handle_key(KeyEvent::new(KeyCode::Char('i'), KeyModifiers::NONE));
+        assert_eq!(app.view_mode, ViewMode::HunkStaging);
+        assert!(app.is_hunk_staging_mode);
+        assert!(app.status_message.contains("Hunk staging mode"));
+
+        // Simulate pressing 'Esc' to exit hunk staging mode
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        assert_eq!(app.view_mode, ViewMode::Diff);
+        assert!(!app.is_hunk_staging_mode);
+        assert!(app.status_message.contains("Exited hunk staging mode"));
+    }
+
+    #[test]
+    fn test_hunk_navigation() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+        app.hunks = mock_hunks();
+        app.view_mode = ViewMode::HunkStaging;
+
+        assert_eq!(app.selected_hunk_index, 0);
+        assert_eq!(app.selected_hunk_line_index, 0);
+
+        // Move down within the first hunk
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.selected_hunk_index, 0);
+        assert_eq!(app.selected_hunk_line_index, 1);
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(app.selected_hunk_index, 0);
+        assert_eq!(app.selected_hunk_line_index, 2);
+
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.selected_hunk_index, 0);
+        assert_eq!(app.selected_hunk_line_index, 3);
+
+        // Move down to the next hunk
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.selected_hunk_index, 1);
+        assert_eq!(app.selected_hunk_line_index, 0);
+
+        // Move up within the second hunk
+        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        assert_eq!(app.selected_hunk_index, 0);
+        assert_eq!(app.selected_hunk_line_index, 3); // Should move to last line of previous hunk
+
+        // Move up to the start
+        app.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE)); // Should be at 0,0 now
+        assert_eq!(app.selected_hunk_index, 0);
+        assert_eq!(app.selected_hunk_line_index, 0);
+
+        // Boundary test: try moving up from 0,0
+        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        assert_eq!(app.selected_hunk_index, 0);
+        assert_eq!(app.selected_hunk_line_index, 0);
+    }
+
+    #[test]
+    fn test_hunk_line_selection_toggle() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+        app.hunks = mock_hunks();
+        app.view_mode = ViewMode::HunkStaging;
+
+        // Select the first line of the first hunk
+        assert!(!app.hunks[0].lines[0].is_selected);
+        app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
+        assert!(app.hunks[0].lines[0].is_selected);
+        assert!(app.status_message.contains("selection toggled"));
+
+        // Toggle it back off
+        app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
+        assert!(!app.hunks[0].lines[0].is_selected);
+    }
+
+    #[test]
+    fn test_hunk_staging_actions() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+        app.files = vec![
+            FileStatus {
+                path: "test.rs".to_string(),
+                status: openisl_git::StatusType::Modified,
+            },
+        ];
+        app.active_panel = PanelType::Files;
+        app.hunks = mock_hunks();
+        app.view_mode = ViewMode::HunkStaging;
+        app.repo_path = Some(std::path::PathBuf::from("/mock/repo")); // Mock repo path
+
+        // Select a line for staging
+        app.hunks[0].lines[1].is_selected = true; // Select 'line2_removed'
+
+        // Simulate staging
+        app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
+        assert!(app.status_message.contains("Staged selected changes"));
+
+        // Select a line for unstaging
+        app.hunks[0].lines[2].is_selected = true; // Select 'line2_added'
+
+        // Simulate unstaging
+        app.handle_key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::NONE));
+        assert!(app.status_message.contains("Unstaged selected changes"));
+
+        // Test with no file selected
+        app.files.clear();
+        app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
+        assert!(app.status_message.contains("No file selected to stage hunks"));
     }
 
     #[test]
@@ -3280,7 +3831,7 @@ mod tests {
         let mut app = App::new(commits, "main".to_string(), None);
 
         assert_eq!(app.view_mode, ViewMode::List);
-        app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL));
+        app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE));
         assert_eq!(app.view_mode, ViewMode::CommandPalette);
     }
 
@@ -3471,7 +4022,7 @@ mod tests {
     #[test]
     fn test_stats_commits_by_author() {
         let commits = create_test_commits();
-        let app = App::new(commits, "main".to_string(), None);
+        let mut app = App::new(commits, "main".to_string(), None);
 
         let author_counts: Vec<(String, usize)> = app.stats.commits_by_author.clone();
         assert_eq!(author_counts.len(), 2);
@@ -3628,7 +4179,7 @@ mod tests {
         let mut app = App::new(commits, "main".to_string(), None);
 
         assert_eq!(app.view_mode, ViewMode::List);
-        app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL));
+        app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE));
         assert_eq!(app.view_mode, ViewMode::CommandPalette);
     }
 
@@ -3637,7 +4188,6 @@ mod tests {
         let commits = create_test_commits();
         let mut app = App::new(commits, "main".to_string(), None);
 
-        app.view_mode = ViewMode::CommandPalette;
         app.command_palette_input = "theme".to_string();
         app.filter_command_palette();
 
