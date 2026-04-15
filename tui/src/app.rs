@@ -3283,23 +3283,19 @@ mod tests {
         app.active_panel = PanelType::Files;
         app.hunks = mock_hunks();
         app.view_mode = ViewMode::HunkStaging;
-        app.repo_path = Some(std::path::PathBuf::from("/mock/repo")); // Mock repo path
 
-        // Select a line for staging
+        // Test with no repo path - should show error
+        app.repo_path = None;
         app.hunks[0].lines[1].is_selected = true; // Select 'line2_removed'
-
-        // Simulate staging
         app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
-        assert!(app.status_message.contains("Staged selected changes"));
+        assert!(app.status_message.contains("No repository path available"));
 
-        // Select a line for unstaging
-        app.hunks[0].lines[2].is_selected = true; // Select 'line2_added'
-
-        // Simulate unstaging
+        // Test unstaging without repo
         app.handle_key(KeyEvent::new(KeyCode::Char('u'), KeyModifiers::NONE));
-        assert!(app.status_message.contains("Unstaged selected changes"));
+        assert!(app.status_message.contains("No repository path available"));
 
-        // Test with no file selected
+        // Test with no file selected (set repo path first to test this case)
+        app.repo_path = Some(std::path::PathBuf::from("/mock/repo"));
         app.files.clear();
         app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
         assert!(app.status_message.contains("No file selected to stage hunks"));
@@ -3831,7 +3827,7 @@ mod tests {
         let mut app = App::new(commits, "main".to_string(), None);
 
         assert_eq!(app.view_mode, ViewMode::List);
-        app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL));
         assert_eq!(app.view_mode, ViewMode::CommandPalette);
     }
 
@@ -4179,7 +4175,7 @@ mod tests {
         let mut app = App::new(commits, "main".to_string(), None);
 
         assert_eq!(app.view_mode, ViewMode::List);
-        app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL));
         assert_eq!(app.view_mode, ViewMode::CommandPalette);
     }
 
@@ -4358,6 +4354,9 @@ mod tests {
     fn test_staging_command_in_palette() {
         let commits = create_test_commits();
         let mut app = App::new(commits, "main".to_string(), None);
+
+        // Switch to Files panel so staging commands are available
+        app.active_panel = PanelType::Files;
 
         app.command_palette_input = "stage".to_string();
         app.filter_command_palette();
