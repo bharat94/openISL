@@ -1,5 +1,7 @@
-use crate::command::run_success;
+use crate::command::{run, run_success, run_with_env};
 use anyhow::{Context, Result};
+use std::collections::HashMap;
+use std::fs;
 use std::path::Path;
 
 pub fn amend_commit(repo_path: &Path, amend_message: Option<&str>) -> Result<()> {
@@ -13,8 +15,88 @@ pub fn amend_commit(repo_path: &Path, amend_message: Option<&str>) -> Result<()>
     Ok(())
 }
 
-pub fn reword_commit(_repo_path: &Path, _commit_hash: &str, _message: &str) -> Result<()> {
-    // TODO: Implement proper reword with interactive rebase
+/// Reword a commit's message. For HEAD, uses amend. For other commits, uses interactive rebase.
+pub fn reword_commit(repo_path: &Path, commit_hash: &str, message: &str) -> Result<()> {
+    // Check if the commit is HEAD
+    let head = run(&["rev-parse", "HEAD"], Some(repo_path))
+        .with_context(|| "Failed to get HEAD")?;
+    let head = head.trim();
+
+    let target = run(&["rev-parse", commit_hash], Some(repo_path))
+        .with_context(|| format!("Failed to resolve commit {}", commit_hash))?;
+    let target = target.trim();
+
+    if head == target {
+        // Simple case: amend HEAD
+        run_success(&["commit", "--amend", "-m", message], Some(repo_path))
+            .with_context(|| "Failed to amend HEAD commit")?;
+    } else {
+        // Complex case: need to use interactive rebase
+        // Find the parent of the target commit
+        let parent = run(&["rev-parse", &format!("{}^", commit_hash)], Some(repo_path))
+            .with_context(|| format!("Failed to get parent of {}", commit_hash))?;
+        let parent = parent.trim();
+
+        let short_hash = &target[..7.min(target.len())];
+
+        // Create a temporary directory for our editor scripts
+        let temp_dir = std::env::temp_dir().join(format!("openisl-reword-{}", std::process::id()));
+        fs::create_dir_all(&temp_dir)?;
+
+        // Create the sequence editor script that changes 'pick <hash>' to 'reword <hash>'
+        let seq_editor_path = temp_dir.join("seq-editor.sh");
+        let seq_editor_script = format!(
+            "#!/bin/sh\nsed -i.bak 's/^pick {}/reword {}/g' \"$1\"\n",
+            short_hash, short_hash
+        );
+        fs::write(&seq_editor_path, &seq_editor_script)?;
+
+        // Make it executable
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&seq_editor_path)?.permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&seq_editor_path, perms)?;
+        }
+
+        // Create the message editor script that writes our message
+        let msg_editor_path = temp_dir.join("msg-editor.sh");
+        // Escape single quotes in the message for shell
+        let escaped_message = message.replace('\'', "'\\''");
+        let msg_editor_script = format!(
+            "#!/bin/sh\nprintf '%s' '{}' > \"$1\"\n",
+            escaped_message
+        );
+        fs::write(&msg_editor_path, &msg_editor_script)?;
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&msg_editor_path)?.permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&msg_editor_path, perms)?;
+        }
+
+        // Run the rebase with our custom editors
+        let mut env = HashMap::new();
+        let seq_editor_str = seq_editor_path.to_string_lossy();
+        let msg_editor_str = msg_editor_path.to_string_lossy();
+        env.insert("GIT_SEQUENCE_EDITOR", seq_editor_str.as_ref());
+        env.insert("GIT_EDITOR", msg_editor_str.as_ref());
+
+        let result = run_with_env(
+            &["rebase", "-i", parent],
+            Some(repo_path),
+            &env,
+        );
+
+        // Clean up temp files
+        let _ = fs::remove_dir_all(&temp_dir);
+
+        result.with_context(|| format!("Failed to reword commit {}", commit_hash))?;
+    }
+
     Ok(())
 }
 

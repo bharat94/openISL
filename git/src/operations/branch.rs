@@ -71,8 +71,70 @@ pub fn create_branch_from_commit(
     Ok(())
 }
 
-pub fn get_refs_for_commit(_repo_path: &Path, _hash: &str) -> Result<Vec<GitRef>> {
-    todo!("Implement get_refs_for_commit")
+/// Get all branches and tags that contain or point to a specific commit
+pub fn get_refs_for_commit(repo_path: &Path, hash: &str) -> Result<Vec<GitRef>> {
+    let mut refs = Vec::new();
+
+    // Get branches that contain this commit
+    let branch_output = run(
+        &["branch", "--all", "--contains", hash, "--format=%(refname:short)"],
+        Some(repo_path),
+    );
+
+    if let Ok(output) = branch_output {
+        for line in output.lines() {
+            let name = line.trim();
+            if name.is_empty() {
+                continue;
+            }
+
+            let ref_type = if name.starts_with("remotes/") || name.contains('/') {
+                RefType::Remote
+            } else {
+                RefType::Branch
+            };
+
+            refs.push(GitRef {
+                name: name.to_string(),
+                ref_type,
+            });
+        }
+    }
+
+    // Get tags that point to this commit
+    let tag_output = run(
+        &["tag", "--points-at", hash],
+        Some(repo_path),
+    );
+
+    if let Ok(output) = tag_output {
+        for line in output.lines() {
+            let name = line.trim();
+            if name.is_empty() {
+                continue;
+            }
+
+            refs.push(GitRef {
+                name: name.to_string(),
+                ref_type: RefType::Tag,
+            });
+        }
+    }
+
+    // Check if this is HEAD
+    let head_output = run(&["rev-parse", "HEAD"], Some(repo_path));
+    let commit_output = run(&["rev-parse", hash], Some(repo_path));
+
+    if let (Ok(head), Ok(commit)) = (head_output, commit_output) {
+        if head.trim() == commit.trim() {
+            refs.push(GitRef {
+                name: "HEAD".to_string(),
+                ref_type: RefType::Head,
+            });
+        }
+    }
+
+    Ok(refs)
 }
 
 #[cfg(test)]

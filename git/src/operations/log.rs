@@ -2,7 +2,13 @@ use crate::command::run;
 use crate::models::Commit;
 use anyhow::{Context, Result};
 use chrono::DateTime;
+use regex::Regex;
 use std::path::Path;
+use std::sync::LazyLock;
+
+/// Regex to match timezone offsets in git date format (e.g., " +0530" or " -0700")
+static TIMEZONE_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r" ([+-])(\d{2})(\d{2})$").unwrap());
 
 const GIT_LOG_FORMAT: &str = "%H|%P|%an|%ae|%ad|%s";
 
@@ -55,31 +61,13 @@ fn parse_commit(record: &str) -> Option<Commit> {
     let author = parts[2].to_string();
     let email = parts[3].to_string();
 
-    let date_str = parts[4]
-        .replace(" +0000", "+00:00")
-        .replace(" +0100", "+01:00")
-        .replace(" +0200", "+02:00")
-        .replace(" +0300", "+03:00")
-        .replace(" +0400", "+04:00")
-        .replace(" +0500", "+05:00")
-        .replace(" +0530", "+05:30")
-        .replace(" +0600", "+06:00")
-        .replace(" +0700", "+07:00")
-        .replace(" +0800", "+08:00")
-        .replace(" +0900", "+09:00")
-        .replace(" +1000", "+10:00")
-        .replace(" -0000", "-00:00")
-        .replace(" -0100", "-01:00")
-        .replace(" -0200", "-02:00")
-        .replace(" -0300", "-03:00")
-        .replace(" -0400", "-04:00")
-        .replace(" -0500", "-05:00")
-        .replace(" -0530", "-05:30")
-        .replace(" -0600", "-06:00")
-        .replace(" -0700", "-07:00")
-        .replace(" -0800", "-08:00")
-        .replace(" -0900", "-09:00")
-        .replace(" -1000", "-10:00")
+    // Convert git date format to RFC3339
+    // e.g., "2024-01-10 12:00:00 +0530" -> "2024-01-10T12:00:00+05:30"
+    let date_str = TIMEZONE_REGEX
+        .replace(parts[4], |caps: &regex::Captures| {
+            // Convert " +0530" to "+05:30"
+            format!("{}{}:{}", &caps[1], &caps[2], &caps[3])
+        })
         .replace(' ', "T");
 
     let date = DateTime::parse_from_rfc3339(&date_str)
