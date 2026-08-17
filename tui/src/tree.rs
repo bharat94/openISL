@@ -1,6 +1,6 @@
-use ratatui::prelude::{Line, Span, Style};
 use crate::theme::Theme;
 use openisl_git::Commit;
+use ratatui::prelude::{Line, Span, Style};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
@@ -36,6 +36,11 @@ pub struct BranchLane {
 pub struct CommitTree {
     nodes: Vec<TreeNode>,
     max_depth: usize,
+}
+
+struct BranchContext<'a> {
+    commit_map: &'a HashMap<String, &'a Commit>,
+    parent_map: &'a HashMap<String, Vec<String>>,
 }
 
 impl CommitTree {
@@ -75,16 +80,13 @@ impl CommitTree {
             }
         }
 
+        let context = BranchContext {
+            commit_map: &commit_map,
+            parent_map: &parent_map,
+        };
+
         for root in root_commits {
-            self.build_branch(
-                root,
-                &commit_map,
-                &parent_map,
-                &mut processed,
-                &mut Vec::new(),
-                0,
-                0,
-            );
+            self.build_branch(root, &context, &mut processed, &mut Vec::new(), 0, 0);
         }
 
         self.nodes.sort_by_key(|n| n.commit.date);
@@ -123,8 +125,7 @@ impl CommitTree {
     fn build_branch<'a>(
         &mut self,
         commit: &'a Commit,
-        commit_map: &HashMap<String, &'a Commit>,
-        parent_map: &HashMap<String, Vec<String>>,
+        context: &BranchContext<'a>,
         processed: &mut HashSet<String>,
         lanes: &mut [bool],
         depth: usize,
@@ -140,7 +141,11 @@ impl CommitTree {
             .iter()
             .any(|r| r.ref_type == openisl_git::RefType::Head);
 
-        let children_hashes = parent_map.get(&commit.hash).cloned().unwrap_or_default();
+        let children_hashes = context
+            .parent_map
+            .get(&commit.hash)
+            .cloned()
+            .unwrap_or_default();
         let is_merge = children_hashes.len() > 1 || commit.parent_hashes.len() > 1;
 
         let commit_type =
@@ -173,7 +178,7 @@ impl CommitTree {
 
         if !children_hashes.is_empty() {
             for (i, child_hash) in children_hashes.iter().enumerate() {
-                if let Some(child_commit) = commit_map.get(child_hash) {
+                if let Some(child_commit) = context.commit_map.get(child_hash) {
                     let mut new_lanes = lanes.to_owned();
                     let child_lane_index = if i == 0 { lane_index } else { depth + i };
 
@@ -190,8 +195,7 @@ impl CommitTree {
 
                     self.build_branch(
                         child_commit,
-                        commit_map,
-                        parent_map,
+                        context,
                         processed,
                         &mut new_lanes,
                         depth + 1,
@@ -272,7 +276,10 @@ pub fn format_tree_node<'a>(
     } else {
         node.commit.short_hash.clone()
     };
-    spans.push(Span::styled(hash_part, Style::default().fg(theme.commit_hash)));
+    spans.push(Span::styled(
+        hash_part,
+        Style::default().fg(theme.commit_hash),
+    ));
     spans.push(Span::raw(" "));
 
     // Summary
@@ -353,7 +360,6 @@ pub fn format_tree_node<'a>(
     }
 
     Line::from(spans)
-
 }
 
 fn format_relative_time(date: chrono::DateTime<chrono::Utc>) -> String {
@@ -404,8 +410,8 @@ pub fn format_tree_lines<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Utc;
     use crate::theme::Theme;
+    use chrono::Utc;
 
     fn create_test_theme() -> Theme {
         Theme::dark()
@@ -516,9 +522,16 @@ mod tests {
         let theme = create_test_theme();
         let lines = format_tree_lines(tree.nodes(), 0, 10, &theme);
         assert_eq!(lines.len(), 3);
-        let all_content: String = lines.into_iter().map(|line| {
-            line.spans.iter().map(|s| s.content.to_string()).collect::<String>()
-        }).collect::<Vec<String>>().join(" ");
+        let all_content: String = lines
+            .into_iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|s| s.content.to_string())
+                    .collect::<String>()
+            })
+            .collect::<Vec<String>>()
+            .join(" ");
         assert!(
             all_content.contains("c123456")
                 || all_content.contains("b123456")
@@ -533,9 +546,16 @@ mod tests {
         let theme = create_test_theme();
         let lines = format_tree_lines(tree.nodes(), 1, 10, &theme);
         assert_eq!(lines.len(), 2);
-        let all_content: String = lines.into_iter().map(|line| {
-            line.spans.iter().map(|s| s.content.to_string()).collect::<String>()
-        }).collect::<Vec<String>>().join(" ");
+        let all_content: String = lines
+            .into_iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|s| s.content.to_string())
+                    .collect::<String>()
+            })
+            .collect::<Vec<String>>()
+            .join(" ");
         assert!(all_content.contains("b123456") || all_content.contains("a123456"));
     }
     #[test]

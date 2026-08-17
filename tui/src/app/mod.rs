@@ -7,17 +7,17 @@
 //! - `handlers`: Event handlers (keyboard, mouse, commit operations)
 //! - `render`: UI rendering functions
 
-pub mod state;
 pub mod handlers;
 pub mod render;
+pub mod state;
 
 pub use state::{CommandAction, FilterMode, PanelType, RepoStats, StatusBarMode, ViewMode};
 
-pub(crate) use anyhow::Result;
 pub(crate) use crate::diff::{DiffParser, DiffStats};
 pub(crate) use crate::keybindings::KeyBindings;
 pub(crate) use crate::theme::Theme;
 pub(crate) use crate::tree::{format_tree_lines, CommitTree};
+pub(crate) use anyhow::Result;
 pub(crate) use crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyModifiers,
     MouseButton, MouseEvent, MouseEventKind,
@@ -31,14 +31,14 @@ pub(crate) use openisl_git::operations::{
     get_stash_list, stash_apply, stash_drop, stash_pop, stash_show, StashEntry,
 };
 pub(crate) use openisl_git::{get_commit_diff, Commit, FileStatus, GitRef};
+pub(crate) use ratatui::widgets::Clear;
 pub(crate) use ratatui::{
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    prelude::{Color, Line, Modifier, Style, Span},
+    prelude::{Color, Line, Modifier, Span, Style},
     widgets::{Block, BorderType, Borders, List, ListItem, Paragraph, Widget},
     Terminal,
 };
-pub(crate) use ratatui::widgets::Clear;
 pub(crate) use std::io::stdout;
 pub(crate) use std::path::Path;
 
@@ -47,7 +47,6 @@ use crate::app::render::{
     render_filter_view, render_help_overlay, render_hunk_staging_view, render_input_view,
     render_list_view, render_search_view, render_stash_view, render_stats_view,
 };
-
 
 pub struct App {
     pub commits: Vec<Commit>,
@@ -92,10 +91,10 @@ pub struct App {
     pub command_palette_input: String,
     pub command_palette_results: Vec<CommandAction>,
     pub hunks: Vec<openisl_git::operations::hunk::Hunk>, // Added for hunk staging
-    pub selected_hunk_index: usize, // Added for hunk staging
-    pub selected_hunk_line_index: usize, // Added for line-by-line hunk staging
-    pub is_hunk_staging_mode: bool, // Added for hunk staging
-    pub current_file_diff_output: String, // Store raw diff for hunk operations
+    pub selected_hunk_index: usize,                      // Added for hunk staging
+    pub selected_hunk_line_index: usize,                 // Added for line-by-line hunk staging
+    pub is_hunk_staging_mode: bool,                      // Added for hunk staging
+    pub current_file_diff_output: String,                // Store raw diff for hunk operations
     pub mouse_scroll_offset: usize,
     pub last_click_position: Option<(u16, u16)>,
     pub last_click_time: Option<std::time::Instant>,
@@ -159,10 +158,10 @@ impl App {
             stash_diff_content: String::new(),
             command_palette_input: String::new(),
             command_palette_results: Vec::new(),
-            hunks: Vec::new(), // Initialized
-            selected_hunk_index: 0, // Initialized
-            selected_hunk_line_index: 0, // Initialized
-            is_hunk_staging_mode: false, // Initialized
+            hunks: Vec::new(),                       // Initialized
+            selected_hunk_index: 0,                  // Initialized
+            selected_hunk_line_index: 0,             // Initialized
+            is_hunk_staging_mode: false,             // Initialized
             current_file_diff_output: String::new(), // Initialized
             mouse_scroll_offset: 0,
             last_click_position: None,
@@ -436,9 +435,17 @@ impl App {
             .into_iter()
             .filter(|action| {
                 let matches_query = self.command_palette_input.is_empty()
-                    || action.name.to_lowercase().contains(&self.command_palette_input.to_lowercase())
-                    || action.description.to_lowercase().contains(&self.command_palette_input.to_lowercase())
-                    || action.action.contains(&self.command_palette_input.to_lowercase());
+                    || action
+                        .name
+                        .to_lowercase()
+                        .contains(&self.command_palette_input.to_lowercase())
+                    || action
+                        .description
+                        .to_lowercase()
+                        .contains(&self.command_palette_input.to_lowercase())
+                    || action
+                        .action
+                        .contains(&self.command_palette_input.to_lowercase());
 
                 let matches_context = action.context.is_empty() // Command is always available
                     || action.context.contains(&active_panel_str); // Command is available in the current panel
@@ -476,14 +483,24 @@ impl App {
                 description: "Move selection up".to_string(),
                 action: "move_up".to_string(),
                 keys: vec!["k".to_string(), "↑".to_string()],
-                context: vec!["files".to_string(), "branches".to_string(), "commits".to_string(), "stash".to_string()],
+                context: vec![
+                    "files".to_string(),
+                    "branches".to_string(),
+                    "commits".to_string(),
+                    "stash".to_string(),
+                ],
             },
             CommandAction {
                 name: "Navigate Down".to_string(),
                 description: "Move selection down".to_string(),
                 action: "move_down".to_string(),
                 keys: vec!["j".to_string(), "↓".to_string()],
-                context: vec!["files".to_string(), "branches".to_string(), "commits".to_string(), "stash".to_string()],
+                context: vec![
+                    "files".to_string(),
+                    "branches".to_string(),
+                    "commits".to_string(),
+                    "stash".to_string(),
+                ],
             },
             CommandAction {
                 name: "Stage/Unstage File".to_string(),
@@ -567,7 +584,11 @@ impl App {
                 description: "Search commits or files".to_string(),
                 action: "search".to_string(),
                 keys: vec!["/".to_string()],
-                context: vec!["commits".to_string(), "files".to_string(), "branches".to_string()],
+                context: vec![
+                    "commits".to_string(),
+                    "files".to_string(),
+                    "branches".to_string(),
+                ],
             },
             CommandAction {
                 name: "Toggle Theme".to_string(),
@@ -837,12 +858,10 @@ mod tests {
     fn test_hunk_staging_mode_entry_exit() {
         let commits = create_test_commits();
         let mut app = App::new(commits, "main".to_string(), None);
-        app.files = vec![
-            FileStatus {
-                path: "test.rs".to_string(),
-                status: openisl_git::StatusType::Modified,
-            },
-        ];
+        app.files = vec![FileStatus {
+            path: "test.rs".to_string(),
+            status: openisl_git::StatusType::Modified,
+        }];
         app.active_panel = PanelType::Files;
         app.hunks = mock_hunks();
 
@@ -932,12 +951,10 @@ mod tests {
     fn test_hunk_staging_actions() {
         let commits = create_test_commits();
         let mut app = App::new(commits, "main".to_string(), None);
-        app.files = vec![
-            FileStatus {
-                path: "test.rs".to_string(),
-                status: openisl_git::StatusType::Modified,
-            },
-        ];
+        app.files = vec![FileStatus {
+            path: "test.rs".to_string(),
+            status: openisl_git::StatusType::Modified,
+        }];
         app.active_panel = PanelType::Files;
         app.hunks = mock_hunks();
         app.view_mode = ViewMode::HunkStaging;
@@ -956,7 +973,9 @@ mod tests {
         app.repo_path = Some(std::path::PathBuf::from("/mock/repo"));
         app.files.clear();
         app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
-        assert!(app.status_message.contains("No file selected to stage hunks"));
+        assert!(app
+            .status_message
+            .contains("No file selected to stage hunks"));
     }
 
     #[test]
@@ -1708,73 +1727,53 @@ mod tests {
         assert!(app.sidebar_visible);
     }
 
-        #[test]
+    #[test]
 
-        fn test_panel_navigation() {
+    fn test_panel_navigation() {
+        let commits = create_test_commits();
 
-            let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
 
-            let mut app = App::new(commits, "main".to_string(), None);
+        // Initial state
 
-    
+        assert_eq!(app.active_panel, PanelType::Commits);
 
-            // Initial state
+        // Next panel sequence
 
-            assert_eq!(app.active_panel, PanelType::Commits);
+        app.next_panel(); // Commits -> Stash
 
-    
+        assert_eq!(app.active_panel, PanelType::Stash);
 
-            // Next panel sequence
+        app.next_panel(); // Stash -> Files
 
-            app.next_panel(); // Commits -> Stash
+        assert_eq!(app.active_panel, PanelType::Files);
 
-            assert_eq!(app.active_panel, PanelType::Stash);
+        app.next_panel(); // Files -> Branches
 
-    
+        assert_eq!(app.active_panel, PanelType::Branches);
 
-            app.next_panel(); // Stash -> Files
+        app.next_panel(); // Branches -> Commits
 
-            assert_eq!(app.active_panel, PanelType::Files);
+        assert_eq!(app.active_panel, PanelType::Commits);
 
-    
+        // Previous panel sequence
 
-            app.next_panel(); // Files -> Branches
+        app.prev_panel(); // Commits -> Branches
 
-            assert_eq!(app.active_panel, PanelType::Branches);
+        assert_eq!(app.active_panel, PanelType::Branches);
 
-    
+        app.prev_panel(); // Branches -> Files
 
-            app.next_panel(); // Branches -> Commits
+        assert_eq!(app.active_panel, PanelType::Files);
 
-            assert_eq!(app.active_panel, PanelType::Commits);
+        app.prev_panel(); // Files -> Stash
 
-    
+        assert_eq!(app.active_panel, PanelType::Stash);
 
-            // Previous panel sequence
+        app.prev_panel(); // Stash -> Commits
 
-            app.prev_panel(); // Commits -> Branches
-
-            assert_eq!(app.active_panel, PanelType::Branches);
-
-    
-
-            app.prev_panel(); // Branches -> Files
-
-            assert_eq!(app.active_panel, PanelType::Files);
-
-    
-
-            app.prev_panel(); // Files -> Stash
-
-            assert_eq!(app.active_panel, PanelType::Stash);
-
-    
-
-            app.prev_panel(); // Stash -> Commits
-
-            assert_eq!(app.active_panel, PanelType::Commits);
-
-        }
+        assert_eq!(app.active_panel, PanelType::Commits);
+    }
 
     #[test]
     fn test_vim_keybindings_gg_go_to_start() {

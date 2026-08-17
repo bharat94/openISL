@@ -2,9 +2,8 @@
 //!
 //! Contains rendering logic for the commit list, sidebar, file and branch
 //! panels, and the commit details view.
-use super::render_footer;
 use super::super::*;
-
+use super::render_footer;
 
 pub(crate) fn render_list_view(app: &App, frame: &mut ratatui::Frame) {
     let chunks = Layout::default()
@@ -47,7 +46,7 @@ pub(crate) fn render_sidebar(app: &App, area: Rect, frame: &mut ratatui::Frame) 
                     .direction(Direction::Vertical)
                     .constraints([
                         Constraint::Length(3), // For the search input
-                        Constraint::Min(10), // For the filtered branches list
+                        Constraint::Min(10),   // For the filtered branches list
                     ])
                     .split(chunks[3]);
                 render_branch_search_input(app, branch_search_chunks[0], frame);
@@ -82,7 +81,9 @@ pub(crate) fn render_panel_tab(
         )
     } else {
         (
-            Style::default().fg(app.theme.text).bg(app.theme.panel_title_inactive_bg),
+            Style::default()
+                .fg(app.theme.text)
+                .bg(app.theme.panel_title_inactive_bg),
             BorderType::Plain,
             app.theme.panel_border_inactive,
         )
@@ -120,10 +121,10 @@ pub(crate) fn render_files_panel(app: &App) -> impl Widget + '_ {
                 openisl_git::StatusType::Deleted => app.theme.file_status_deleted,
                 openisl_git::StatusType::Untracked => app.theme.file_status_untracked,
                 openisl_git::StatusType::ModifiedStaged => app.theme.file_status_modified, // Staged modified
-                openisl_git::StatusType::AddedStaged => app.theme.file_status_added,     // Staged added
+                openisl_git::StatusType::AddedStaged => app.theme.file_status_added, // Staged added
                 openisl_git::StatusType::DeletedStaged => app.theme.file_status_deleted, // Staged deleted
-                openisl_git::StatusType::Renamed => app.theme.accent,                     // Renamed files
-                openisl_git::StatusType::Conflicted => app.theme.error,                   // Conflicted files
+                openisl_git::StatusType::Renamed => app.theme.accent, // Renamed files
+                openisl_git::StatusType::Conflicted => app.theme.error, // Conflicted files
             };
 
             let content = format!("{} {}", status_char, file.path);
@@ -134,7 +135,9 @@ pub(crate) fn render_files_panel(app: &App) -> impl Widget + '_ {
                     .position(|f| f.path == file.path)
                     .unwrap_or(0);
             let style = if is_selected {
-                Style::default().fg(app.theme.selected).bg(app.theme.selected_bg)
+                Style::default()
+                    .fg(app.theme.selected)
+                    .bg(app.theme.selected_bg)
             } else {
                 Style::default().fg(status_color)
             };
@@ -168,7 +171,9 @@ pub(crate) fn render_branches_panel(app: &App) -> impl Widget + '_ {
                     .position(|b| b.name == branch.name)
                     .unwrap_or(0);
             let style = if is_selected {
-                Style::default().fg(app.theme.selected).bg(app.theme.selected_bg)
+                Style::default()
+                    .fg(app.theme.selected)
+                    .bg(app.theme.selected_bg)
             } else {
                 Style::default().fg(app.theme.branch_name)
             };
@@ -190,7 +195,12 @@ pub(crate) fn render_branches_panel(app: &App) -> impl Widget + '_ {
 pub(crate) fn render_commits_panel(app: &App, area: Rect) -> impl Widget + '_ {
     let panel_height = area.height.saturating_sub(2) as usize;
     let visible_count = panel_height.max(1);
-    let raw_lines = format_tree_lines(app.tree.nodes(), app.scroll_offset, visible_count, &app.theme);
+    let raw_lines = format_tree_lines(
+        app.tree.nodes(),
+        app.scroll_offset,
+        visible_count,
+        &app.theme,
+    );
 
     let items: Vec<ListItem<'_>> = raw_lines // Corrected: assign to items
         .into_iter()
@@ -257,7 +267,12 @@ pub(crate) fn render_main_content(app: &App, area: Rect, frame: &mut ratatui::Fr
 
     let content_height = chunks[1].height.saturating_sub(2) as usize;
     let visible_count = content_height.max(1);
-    let raw_lines = format_tree_lines(app.tree.nodes(), app.scroll_offset, visible_count, &app.theme);
+    let raw_lines = format_tree_lines(
+        app.tree.nodes(),
+        app.scroll_offset,
+        visible_count,
+        &app.theme,
+    );
 
     let lines: Vec<Line<'_>> = raw_lines
         .into_iter()

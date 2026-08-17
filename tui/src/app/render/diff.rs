@@ -3,7 +3,6 @@
 //! Contains rendering logic for the diff, input, and search views.
 use super::super::*;
 
-
 pub(crate) fn render_diff_view(app: &App, frame: &mut ratatui::Frame) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)

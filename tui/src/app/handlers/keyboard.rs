@@ -4,7 +4,6 @@
 //! list navigation helpers shared by keyboard and mouse handlers.
 use super::super::*;
 
-
 impl App {
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> bool {
         match self.view_mode {
@@ -238,7 +237,13 @@ impl App {
                 self.filter_branches();
             }
             KeyCode::Char(c) => {
-                if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ' ' || c == '.' || c == '/' {
+                if c.is_ascii_alphanumeric()
+                    || c == '-'
+                    || c == '_'
+                    || c == ' '
+                    || c == '.'
+                    || c == '/'
+                {
                     self.branch_search_query.push(c);
                     self.filter_branches();
                 }
@@ -319,7 +324,8 @@ impl App {
                     self.view_mode = ViewMode::HunkStaging;
                     self.status_message = "Hunk staging mode (j/k to navigate, Space to select, s to stage, u to unstage)".to_string();
                 } else {
-                    self.status_message = "Select a file with diffs to enter hunk staging mode".to_string();
+                    self.status_message =
+                        "Select a file with diffs to enter hunk staging mode".to_string();
                 }
             }
             _ => {}
@@ -487,7 +493,7 @@ impl App {
                     }
                     if let Some(stash) = self.stashes.get(self.selected_stash_index) {
                         let stash_name = stash.name.clone();
-                    self.fetch_stash_diff(&stash_name);
+                        self.fetch_stash_diff(&stash_name);
                     }
                 }
             }
@@ -499,7 +505,7 @@ impl App {
                     }
                     if let Some(stash) = self.stashes.get(self.selected_stash_index) {
                         let stash_name = stash.name.clone();
-                    self.fetch_stash_diff(&stash_name);
+                        self.fetch_stash_diff(&stash_name);
                     }
                 }
             }
@@ -537,28 +543,28 @@ impl App {
             "toggle_sidebar" => self.toggle_sidebar(),
             "next_panel" => self.next_panel(),
             "prev_panel" => self.prev_panel(),
-            "move_up" => {
-                match self.active_panel {
-                    PanelType::Commits => self.move_up(),
-                    PanelType::Files => self.move_file_selection_up(),
-                    PanelType::Branches => {
-                        if self.selected_branch_index > 0 {
-                            self.selected_branch_index -= 1;
-                        }
+            "move_up" => match self.active_panel {
+                PanelType::Commits => self.move_up(),
+                PanelType::Files => self.move_file_selection_up(),
+                PanelType::Branches => {
+                    if self.selected_branch_index > 0 {
+                        self.selected_branch_index -= 1;
                     }
-                    PanelType::Stash => { let _ = self.handle_stash_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE)); },
+                }
+                PanelType::Stash => {
+                    let _ = self.handle_stash_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
                 }
             },
-            "move_down" => {
-                match self.active_panel {
-                    PanelType::Commits => self.move_down(),
-                    PanelType::Files => self.move_file_selection_down(),
-                    PanelType::Branches => {
-                        if self.selected_branch_index < self.branches.len().saturating_sub(1) {
-                            self.selected_branch_index += 1;
-                        }
+            "move_down" => match self.active_panel {
+                PanelType::Commits => self.move_down(),
+                PanelType::Files => self.move_file_selection_down(),
+                PanelType::Branches => {
+                    if self.selected_branch_index < self.branches.len().saturating_sub(1) {
+                        self.selected_branch_index += 1;
                     }
-                    PanelType::Stash => { let _ = self.handle_stash_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)); },
+                }
+                PanelType::Stash => {
+                    let _ = self.handle_stash_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
                 }
             },
             "go_to_start" => self.go_to_start(),
@@ -585,25 +591,25 @@ impl App {
             "view_stashes" => {
                 self.refresh_stashes();
                 self.view_mode = ViewMode::Stash;
-            },
+            }
             "apply_stash" => {
                 if let Some(stash) = self.stashes.get(self.selected_stash_index) {
                     let stash_name = stash.name.clone();
                     self.apply_stash(Some(&stash_name));
                 }
-            },
+            }
             "drop_stash" => {
                 if let Some(stash) = self.stashes.get(self.selected_stash_index) {
                     let stash_name = stash.name.clone();
                     self.drop_stash(Some(&stash_name));
                 }
-            },
+            }
             "pop_stash" => {
                 if let Some(stash) = self.stashes.get(self.selected_stash_index) {
                     let stash_name = stash.name.clone();
                     self.pop_stash(Some(&stash_name));
                 }
-            },
+            }
             _ => {
                 self.status_message = format!("Unknown command: {}", action);
             }

@@ -18,8 +18,8 @@ pub fn amend_commit(repo_path: &Path, amend_message: Option<&str>) -> Result<()>
 /// Reword a commit's message. For HEAD, uses amend. For other commits, uses interactive rebase.
 pub fn reword_commit(repo_path: &Path, commit_hash: &str, message: &str) -> Result<()> {
     // Check if the commit is HEAD
-    let head = run(&["rev-parse", "HEAD"], Some(repo_path))
-        .with_context(|| "Failed to get HEAD")?;
+    let head =
+        run(&["rev-parse", "HEAD"], Some(repo_path)).with_context(|| "Failed to get HEAD")?;
     let head = head.trim();
 
     let target = run(&["rev-parse", commit_hash], Some(repo_path))
@@ -33,8 +33,11 @@ pub fn reword_commit(repo_path: &Path, commit_hash: &str, message: &str) -> Resu
     } else {
         // Complex case: need to use interactive rebase
         // Find the parent of the target commit
-        let parent = run(&["rev-parse", &format!("{}^", commit_hash)], Some(repo_path))
-            .with_context(|| format!("Failed to get parent of {}", commit_hash))?;
+        let parent = run(
+            &["rev-parse", &format!("{}^", commit_hash)],
+            Some(repo_path),
+        )
+        .with_context(|| format!("Failed to get parent of {}", commit_hash))?;
         let parent = parent.trim();
 
         let short_hash = &target[..7.min(target.len())];
@@ -64,10 +67,7 @@ pub fn reword_commit(repo_path: &Path, commit_hash: &str, message: &str) -> Resu
         let msg_editor_path = temp_dir.join("msg-editor.sh");
         // Escape single quotes in the message for shell
         let escaped_message = message.replace('\'', "'\\''");
-        let msg_editor_script = format!(
-            "#!/bin/sh\nprintf '%s' '{}' > \"$1\"\n",
-            escaped_message
-        );
+        let msg_editor_script = format!("#!/bin/sh\nprintf '%s' '{}' > \"$1\"\n", escaped_message);
         fs::write(&msg_editor_path, &msg_editor_script)?;
 
         #[cfg(unix)]
@@ -85,11 +85,7 @@ pub fn reword_commit(repo_path: &Path, commit_hash: &str, message: &str) -> Resu
         env.insert("GIT_SEQUENCE_EDITOR", seq_editor_str.as_ref());
         env.insert("GIT_EDITOR", msg_editor_str.as_ref());
 
-        let result = run_with_env(
-            &["rebase", "-i", parent],
-            Some(repo_path),
-            &env,
-        );
+        let result = run_with_env(&["rebase", "-i", parent], Some(repo_path), &env);
 
         // Clean up temp files
         let _ = fs::remove_dir_all(&temp_dir);

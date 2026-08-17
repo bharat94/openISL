@@ -90,7 +90,7 @@ mod git_operations_tests {
         for commit in commits {
             assert!(!commit.hash.is_empty());
             assert!(commit.short_hash.len() >= 7);
-            assert!(commit.short_hash == &commit.hash[..7.min(commit.hash.len())]);
+            assert!(commit.short_hash == commit.hash[..7.min(commit.hash.len())]);
         }
     }
 
@@ -279,7 +279,7 @@ mod edge_case_tests {
     #[test]
     fn test_commits_ordering_with_same_date() {
         let now = chrono::Utc::now();
-        let commits = vec![
+        let commits = [
             Commit {
                 hash: "abc123def456789".to_string(),
                 short_hash: "abc123d".to_string(),

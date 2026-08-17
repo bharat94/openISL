@@ -2,9 +2,8 @@
 //!
 //! Contains rendering logic for the command palette, stash view, hunk
 //! staging view, and help/filter/stats overlays.
-use super::render_footer;
 use super::super::*;
-
+use super::render_footer;
 
 pub(crate) fn render_command_palette(app: &App, frame: &mut ratatui::Frame) {
     // Determine the size of the command palette overlay
@@ -24,7 +23,11 @@ pub(crate) fn render_command_palette(app: &App, frame: &mut ratatui::Frame) {
 
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(1), Constraint::Length(1)])
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(1),
+            Constraint::Length(1),
+        ])
         .margin(1)
         .split(area);
 
@@ -32,7 +35,11 @@ pub(crate) fn render_command_palette(app: &App, frame: &mut ratatui::Frame) {
     let input_text = format!("/{}", app.command_palette_input);
     let input_widget = Paragraph::new(input_text)
         .style(Style::default().fg(app.theme.command_palette_input_fg))
-        .block(Block::default().borders(Borders::BOTTOM).border_style(Style::default().fg(app.theme.command_palette_input_border)));
+        .block(
+            Block::default()
+                .borders(Borders::BOTTOM)
+                .border_style(Style::default().fg(app.theme.command_palette_input_border)),
+        );
     frame.render_widget(input_widget, chunks[0]);
 
     // Render results
@@ -46,7 +53,8 @@ pub(crate) fn render_command_palette(app: &App, frame: &mut ratatui::Frame) {
                 format!(" ({})", cmd.keys.join(", "))
             };
             let content = format!("{} - {}{}", cmd.name, cmd.description, keys_str);
-            ListItem::new(Line::from(content)).style(Style::default().fg(app.theme.command_palette_item_fg))
+            ListItem::new(Line::from(content))
+                .style(Style::default().fg(app.theme.command_palette_item_fg))
         })
         .collect();
 
@@ -95,7 +103,9 @@ pub(crate) fn render_stash_view(app: &App, frame: &mut ratatui::Frame) {
             let content = format!("[{}] {} ({})", i, stash.message, stash.name);
             let is_selected = i == app.selected_stash_index;
             let style = if is_selected {
-                Style::default().fg(app.theme.selected).bg(app.theme.selected_bg)
+                Style::default()
+                    .fg(app.theme.selected)
+                    .bg(app.theme.selected_bg)
             } else {
                 Style::default().fg(app.theme.text)
             };
@@ -128,7 +138,6 @@ pub(crate) fn render_stash_view(app: &App, frame: &mut ratatui::Frame) {
                 .border_style(Style::default().fg(app.theme.border)),
         )
         .wrap(ratatui::widgets::Wrap { trim: false });
-
 
     frame.render_widget(list, chunks[0]);
     frame.render_widget(diff_text, chunks[1]);
@@ -164,16 +173,24 @@ pub(crate) fn render_hunk_staging_view(app: &App, frame: &mut ratatui::Frame) {
     let mut lines: Vec<Line> = Vec::new();
     for (hunk_idx, hunk) in app.hunks.iter().enumerate() {
         let hunk_header = format!("Hunk {}/{}", hunk_idx + 1, app.hunks.len());
-        lines.push(Line::from(hunk_header).style(Style::default().fg(app.theme.hunk_header).add_modifier(Modifier::BOLD)));
+        lines.push(
+            Line::from(hunk_header).style(
+                Style::default()
+                    .fg(app.theme.hunk_header)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        );
 
         for (line_idx, line) in hunk.lines.iter().enumerate() {
             let mut style = Style::default();
             let prefix = match line.line_type {
-                HunkLineType::Addition => { // Corrected variant name
+                HunkLineType::Addition => {
+                    // Corrected variant name
                     style = style.fg(app.theme.diff_added);
                     "+"
                 }
-                HunkLineType::Deletion => { // Corrected variant name
+                HunkLineType::Deletion => {
+                    // Corrected variant name
                     style = style.fg(app.theme.diff_removed);
                     "-"
                 }

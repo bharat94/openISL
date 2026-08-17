@@ -77,7 +77,13 @@ pub fn get_refs_for_commit(repo_path: &Path, hash: &str) -> Result<Vec<GitRef>> 
 
     // Get branches that contain this commit
     let branch_output = run(
-        &["branch", "--all", "--contains", hash, "--format=%(refname:short)"],
+        &[
+            "branch",
+            "--all",
+            "--contains",
+            hash,
+            "--format=%(refname:short)",
+        ],
         Some(repo_path),
     );
 
@@ -102,10 +108,7 @@ pub fn get_refs_for_commit(repo_path: &Path, hash: &str) -> Result<Vec<GitRef>> 
     }
 
     // Get tags that point to this commit
-    let tag_output = run(
-        &["tag", "--points-at", hash],
-        Some(repo_path),
-    );
+    let tag_output = run(&["tag", "--points-at", hash], Some(repo_path));
 
     if let Ok(output) = tag_output {
         for line in output.lines() {

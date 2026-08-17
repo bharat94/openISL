@@ -3,17 +3,16 @@
 //! Contains mouse event dispatch and click/scroll handling logic.
 use super::super::*;
 
-
 impl App {
     pub(crate) fn handle_mouse(&mut self, event: MouseEvent) -> bool {
         if !self.mouse_enabled {
             return false;
         }
         match event.kind {
-            MouseEventKind::Down(btn) if btn == MouseButton::Left => {
+            MouseEventKind::Down(MouseButton::Left) => {
                 self.handle_left_click(event);
             }
-            MouseEventKind::Down(btn) if btn == MouseButton::Right => {
+            MouseEventKind::Down(MouseButton::Right) => {
                 self.handle_right_click();
             }
             MouseEventKind::ScrollDown => {
@@ -85,12 +84,9 @@ impl App {
     }
 
     fn handle_double_click(&mut self) {
-        match self.view_mode {
-            ViewMode::List => {
-                self.view_mode = ViewMode::Details;
-                self.status_message = "Double-click: viewing details".to_string();
-            }
-            _ => {}
+        if self.view_mode == ViewMode::List {
+            self.view_mode = ViewMode::Details;
+            self.status_message = "Double-click: viewing details".to_string();
         }
     }
 

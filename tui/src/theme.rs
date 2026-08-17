@@ -38,10 +38,10 @@ pub struct Theme {
     pub command_palette_item_fg: Color,
     pub command_palette_selected_bg: Color,
     pub command_palette_selected_fg: Color,
-    pub hunk_header: Color, // New field for hunk header
-    pub diff_added: Color,      // New field for added lines in diff
-    pub diff_removed: Color,    // New field for removed lines in diff
-    pub diff_context: Color,    // New field for context lines in diff
+    pub hunk_header: Color,  // New field for hunk header
+    pub diff_added: Color,   // New field for added lines in diff
+    pub diff_removed: Color, // New field for removed lines in diff
+    pub diff_context: Color, // New field for context lines in diff
 }
 
 impl Theme {
@@ -83,9 +83,9 @@ impl Theme {
             command_palette_selected_bg: Color::Rgb(70, 70, 100),
             command_palette_selected_fg: Color::Rgb(255, 255, 255),
             hunk_header: Color::Rgb(0, 191, 255), // Cyan-like for dark
-            diff_added: Color::Rgb(0, 255, 127),    // Bright green
-            diff_removed: Color::Rgb(255, 69, 0),   // Orange-red
-            diff_context: Color::Rgb(100, 100, 100),// Dark grey
+            diff_added: Color::Rgb(0, 255, 127),  // Bright green
+            diff_removed: Color::Rgb(255, 69, 0), // Orange-red
+            diff_context: Color::Rgb(100, 100, 100), // Dark grey
         }
     }
 
@@ -126,9 +126,9 @@ impl Theme {
             command_palette_item_fg: Color::DarkGray,
             command_palette_selected_bg: Color::Gray,
             command_palette_selected_fg: Color::Black,
-            hunk_header: Color::Blue, // Blue for light
-            diff_added: Color::Green,    // Green
-            diff_removed: Color::Red,    // Red
+            hunk_header: Color::Blue,      // Blue for light
+            diff_added: Color::Green,      // Green
+            diff_removed: Color::Red,      // Red
             diff_context: Color::DarkGray, // Dark grey
         }
     }
@@ -171,8 +171,8 @@ impl Theme {
             command_palette_selected_bg: Color::Rgb(78, 74, 103),
             command_palette_selected_fg: Color::Rgb(248, 248, 248),
             hunk_header: Color::Rgb(102, 217, 239), // Cyan for monokai
-            diff_added: Color::Rgb(166, 227, 161),    // Green
-            diff_removed: Color::Rgb(243, 139, 168),   // Red
+            diff_added: Color::Rgb(166, 227, 161),  // Green
+            diff_removed: Color::Rgb(243, 139, 168), // Red
             diff_context: Color::Rgb(128, 128, 128), // Grey
         }
     }
@@ -215,8 +215,8 @@ impl Theme {
             command_palette_selected_bg: Color::Rgb(76, 86, 106),
             command_palette_selected_fg: Color::Rgb(236, 239, 244),
             hunk_header: Color::Rgb(136, 192, 208), // Blue for nord
-            diff_added: Color::Rgb(163, 190, 140),    // Green
-            diff_removed: Color::Rgb(191, 97, 106),   // Red
+            diff_added: Color::Rgb(163, 190, 140),  // Green
+            diff_removed: Color::Rgb(191, 97, 106), // Red
             diff_context: Color::Rgb(129, 161, 193), // Grey-blue
         }
     }

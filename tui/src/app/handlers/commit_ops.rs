@@ -3,7 +3,6 @@
 //! Contains commit, file, hunk, and stash operations invoked by handlers.
 use super::super::*;
 
-
 impl App {
     pub(crate) fn stage_selected_hunks_or_lines(&mut self) {
         if let Some(repo_path) = &self.repo_path {
@@ -12,19 +11,31 @@ impl App {
                 for (hunk_idx, hunk) in self.hunks.iter_mut().enumerate() {
                     if hunk.is_selected {
                         // Stage entire hunk
-                        if let Err(e) = stage_hunk(repo_path, Path::new(&file.path), hunk_idx, &self.current_file_diff_output) {
+                        if let Err(e) = stage_hunk(
+                            repo_path,
+                            Path::new(&file.path),
+                            hunk_idx,
+                            &self.current_file_diff_output,
+                        ) {
                             self.status_message = format!("Error staging hunk: {}", e);
                             return;
                         }
                     } else {
                         // Stage selected lines within the hunk
-                        let selected_lines: Vec<&HunkLine> = hunk.lines.iter().filter(|l| l.is_selected).collect();
+                        let selected_lines: Vec<&HunkLine> =
+                            hunk.lines.iter().filter(|l| l.is_selected).collect();
                         if !selected_lines.is_empty() {
                             // This would require a more complex partial staging mechanism in git operations
                             // For simplicity, if any line is selected, we'll try to stage the hunk
                             // A more robust solution would involve creating a patch for only the selected lines.
-                            if let Err(e) = stage_hunk(repo_path, Path::new(&file.path), hunk_idx, &self.current_file_diff_output) {
-                                self.status_message = format!("Error staging selected lines: {}", e);
+                            if let Err(e) = stage_hunk(
+                                repo_path,
+                                Path::new(&file.path),
+                                hunk_idx,
+                                &self.current_file_diff_output,
+                            ) {
+                                self.status_message =
+                                    format!("Error staging selected lines: {}", e);
                                 return;
                             }
                         }
@@ -48,17 +59,29 @@ impl App {
                 for (hunk_idx, hunk) in self.hunks.iter_mut().enumerate() {
                     if hunk.is_selected {
                         // Unstage entire hunk
-                        if let Err(e) = unstage_hunk(repo_path, Path::new(&file.path), hunk_idx, &self.current_file_diff_output) {
+                        if let Err(e) = unstage_hunk(
+                            repo_path,
+                            Path::new(&file.path),
+                            hunk_idx,
+                            &self.current_file_diff_output,
+                        ) {
                             self.status_message = format!("Error unstaging hunk: {}", e);
                             return;
                         }
                     } else {
                         // Unstage selected lines within the hunk
-                        let selected_lines: Vec<&HunkLine> = hunk.lines.iter().filter(|l| l.is_selected).collect();
+                        let selected_lines: Vec<&HunkLine> =
+                            hunk.lines.iter().filter(|l| l.is_selected).collect();
                         if !selected_lines.is_empty() {
                             // Similar to staging, this would require a more complex partial unstaging mechanism
-                            if let Err(e) = unstage_hunk(repo_path, Path::new(&file.path), hunk_idx, &self.current_file_diff_output) {
-                                self.status_message = format!("Error unstaging selected lines: {}", e);
+                            if let Err(e) = unstage_hunk(
+                                repo_path,
+                                Path::new(&file.path),
+                                hunk_idx,
+                                &self.current_file_diff_output,
+                            ) {
+                                self.status_message =
+                                    format!("Error unstaging selected lines: {}", e);
                                 return;
                             }
                         }
@@ -83,8 +106,10 @@ impl App {
         if let Some(file) = self.files.get(self.selected_file_index) {
             if let Some(ref repo_path) = self.repo_path {
                 // Get diff for the selected file (either staged or unstaged)
-                let staged_hunks_result = get_file_diff_hunks(repo_path, Path::new(&file.path), true);
-                let unstaged_hunks_result = get_file_diff_hunks(repo_path, Path::new(&file.path), false);
+                let staged_hunks_result =
+                    get_file_diff_hunks(repo_path, Path::new(&file.path), true);
+                let unstaged_hunks_result =
+                    get_file_diff_hunks(repo_path, Path::new(&file.path), false);
 
                 match (staged_hunks_result, unstaged_hunks_result) {
                     (Ok(staged_hunks), Ok(mut unstaged_hunks)) => {
@@ -99,13 +124,15 @@ impl App {
                         self.status_message = format!("Fetched diff for {}", file.path);
                     }
                     (Err(e), _) | (_, Err(e)) => {
-                        self.status_message = format!("Error fetching hunks for {}: {}", file.path, e);
+                        self.status_message =
+                            format!("Error fetching hunks for {}: {}", file.path, e);
                     }
                 }
 
                 // Also update the general diff_content for the Diff View if still used
                 let file_path_str = file.path.clone(); // Clone to own the String and avoid borrow issues
-                match openisl_git::get_diff(repo_path, Some(&file_path_str), false) { // Corrected: Path::new(&file.path) to &file.path
+                match openisl_git::get_diff(repo_path, Some(&file_path_str), false) {
+                    // Corrected: Path::new(&file.path) to &file.path
                     Ok(diff) => {
                         self.diff_content = diff;
                         self.current_file_diff_output = self.diff_content.clone(); // Store raw diff
@@ -132,7 +159,9 @@ impl App {
                         self.current_file_diff_output = self.diff_content.clone();
                         self.parse_diff();
                         self.hunks.clear(); // No hunks for commit diff for now
-                        self.status_message = format!("Fetched diff for commit {}", commit_short_hash); // Use cloned short_hash
+                        self.status_message =
+                            format!("Fetched diff for commit {}", commit_short_hash);
+                        // Use cloned short_hash
                     }
                     Err(e) => {
                         self.diff_content = format!("Error fetching diff: {}", e);
@@ -468,7 +497,8 @@ impl App {
         if let Some(ref repo_path) = self.repo_path {
             match stash_apply(repo_path, stash_index_str) {
                 Ok(_) => {
-                    self.status_message = format!("Stash {} applied", stash_index_str.unwrap_or("0"));
+                    self.status_message =
+                        format!("Stash {} applied", stash_index_str.unwrap_or("0"));
                     self.refresh_stashes();
                     self.is_loading = false;
                 }
@@ -488,7 +518,8 @@ impl App {
         if let Some(ref repo_path) = self.repo_path {
             match stash_drop(repo_path, stash_index_str) {
                 Ok(_) => {
-                    self.status_message = format!("Stash {} dropped", stash_index_str.unwrap_or("0"));
+                    self.status_message =
+                        format!("Stash {} dropped", stash_index_str.unwrap_or("0"));
                     self.refresh_stashes();
                     self.is_loading = false;
                 }
@@ -508,7 +539,8 @@ impl App {
         if let Some(ref repo_path) = self.repo_path {
             match stash_pop(repo_path, stash_index_str) {
                 Ok(_) => {
-                    self.status_message = format!("Stash {} popped", stash_index_str.unwrap_or("0"));
+                    self.status_message =
+                        format!("Stash {} popped", stash_index_str.unwrap_or("0"));
                     self.refresh_stashes();
                     self.is_loading = false;
                 }

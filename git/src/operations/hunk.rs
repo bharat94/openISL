@@ -1,7 +1,7 @@
+use crate::command::run;
 use anyhow::{Context, Result};
 use std::path::Path;
 use tempfile; // Added for temporary file creation
-use crate::command::run;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum HunkLineType {
@@ -22,10 +22,10 @@ pub struct Hunk {
     pub header: String,
     pub lines: Vec<HunkLine>, // Changed from `content: Vec<String>`
     pub is_staged: bool,
-    pub old_start: usize, // Start line in old file
-    pub old_lines: usize, // Number of lines in old file
-    pub new_start: usize, // Start line in new file
-    pub new_lines: usize, // Number of lines in new file
+    pub old_start: usize,  // Start line in old file
+    pub old_lines: usize,  // Number of lines in old file
+    pub new_start: usize,  // Start line in new file
+    pub new_lines: usize,  // Number of lines in new file
     pub is_selected: bool, // For TUI interaction (visual staging of entire hunk)
 }
 
@@ -46,7 +46,10 @@ pub fn get_file_diff_hunks(repo_path: &Path, file_path: &Path, staged: bool) -> 
     let mut current_hunk: Option<Hunk> = None;
 
     for line in output.lines() {
-        if line.starts_with("diff --git") || line.starts_with("--- a/") || line.starts_with("+++ b/") {
+        if line.starts_with("diff --git")
+            || line.starts_with("--- a/")
+            || line.starts_with("+++ b/")
+        {
             // New file diff or file headers, finalize current hunk if exists
             if let Some(h) = current_hunk.take() {
                 hunks.push(h);
@@ -124,14 +127,28 @@ pub fn get_file_diff_hunks(repo_path: &Path, file_path: &Path, staged: bool) -> 
     Ok(hunks)
 }
 
-pub fn stage_hunk(repo_path: &Path, file_path: &Path, hunk_index: usize, _diff_output: &str) -> Result<()> {
+pub fn stage_hunk(
+    repo_path: &Path,
+    file_path: &Path,
+    hunk_index: usize,
+    _diff_output: &str,
+) -> Result<()> {
     // Stage a specific hunk by creating a temporary patch file and applying it.
     // This assumes diff_output contains the full diff for the file.
     // We need to extract the specific hunk and apply it with `git apply --cached`.
 
     let hunks = get_file_diff_hunks(repo_path, file_path, false)?; // Get unstaged hunks
     if let Some(hunk_to_stage) = hunks.get(hunk_index) {
-        let patch_content = format!("{}\n{}", hunk_to_stage.header, hunk_to_stage.lines.iter().map(|l| l.content.clone()).collect::<Vec<String>>().join("\n"));
+        let patch_content = format!(
+            "{}\n{}",
+            hunk_to_stage.header,
+            hunk_to_stage
+                .lines
+                .iter()
+                .map(|l| l.content.clone())
+                .collect::<Vec<String>>()
+                .join("\n")
+        );
         let temp_dir = tempfile::tempdir()?;
         let patch_file_path = temp_dir.path().join("hunk.patch");
         std::fs::write(&patch_file_path, patch_content)?;
@@ -141,11 +158,17 @@ pub fn stage_hunk(repo_path: &Path, file_path: &Path, hunk_index: usize, _diff_o
                 "apply",
                 "--cached", // Stage the changes
                 "--unidiff-zero",
-                patch_file_path.to_str().context("Invalid patch file path")?,
+                patch_file_path
+                    .to_str()
+                    .context("Invalid patch file path")?,
             ],
             Some(repo_path),
         )
-        .context(format!("Failed to stage hunk {} for file {}", hunk_index, file_path.display()))?;
+        .context(format!(
+            "Failed to stage hunk {} for file {}",
+            hunk_index,
+            file_path.display()
+        ))?;
 
         Ok(())
     } else {
@@ -153,13 +176,27 @@ pub fn stage_hunk(repo_path: &Path, file_path: &Path, hunk_index: usize, _diff_o
     }
 }
 
-pub fn unstage_hunk(repo_path: &Path, file_path: &Path, hunk_index: usize, _diff_output: &str) -> Result<()> {
+pub fn unstage_hunk(
+    repo_path: &Path,
+    file_path: &Path,
+    hunk_index: usize,
+    _diff_output: &str,
+) -> Result<()> {
     // Unstage a specific hunk by creating a temporary patch file and applying it in reverse.
     // This assumes diff_output contains the full diff for the file.
 
     let hunks = get_file_diff_hunks(repo_path, file_path, true)?; // Get staged hunks
     if let Some(hunk_to_unstage) = hunks.get(hunk_index) {
-        let patch_content = format!("{}\n{}", hunk_to_unstage.header, hunk_to_unstage.lines.iter().map(|l| l.content.clone()).collect::<Vec<String>>().join("\n"));
+        let patch_content = format!(
+            "{}\n{}",
+            hunk_to_unstage.header,
+            hunk_to_unstage
+                .lines
+                .iter()
+                .map(|l| l.content.clone())
+                .collect::<Vec<String>>()
+                .join("\n")
+        );
         let temp_dir = tempfile::tempdir()?;
         let patch_file_path = temp_dir.path().join("hunk.patch");
         std::fs::write(&patch_file_path, patch_content)?;
@@ -170,11 +207,17 @@ pub fn unstage_hunk(repo_path: &Path, file_path: &Path, hunk_index: usize, _diff
                 "--cached", // Unstage the changes (apply in reverse to index)
                 "--reverse",
                 "--unidiff-zero",
-                patch_file_path.to_str().context("Invalid patch file path")?,
+                patch_file_path
+                    .to_str()
+                    .context("Invalid patch file path")?,
             ],
             Some(repo_path),
         )
-        .context(format!("Failed to unstage hunk {} for file {}", hunk_index, file_path.display()))?;
+        .context(format!(
+            "Failed to unstage hunk {} for file {}",
+            hunk_index,
+            file_path.display()
+        ))?;
 
         Ok(())
     } else {

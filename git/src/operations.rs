@@ -14,8 +14,7 @@ pub mod sync;
 pub mod tag;
 
 pub use branch::{
-    create_branch, create_branch_from_commit, get_branches, get_current_branch,
-    get_refs_for_commit,
+    create_branch, create_branch_from_commit, get_branches, get_current_branch, get_refs_for_commit,
 };
 pub use checkout::{checkout, checkout_commit};
 pub use commit::{

@@ -4,10 +4,10 @@
 //! shortcuts, sync status, loading indicators, and the spinner.
 use super::super::*;
 
-
 fn get_spinner_char() -> char {
     let spinner_chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-    let index = (std::time::Instant::now().elapsed().as_millis() / 100) as usize % spinner_chars.len();
+    let index =
+        (std::time::Instant::now().elapsed().as_millis() / 100) as usize % spinner_chars.len();
     spinner_chars[index]
 }
 
@@ -47,14 +47,24 @@ pub(crate) fn render_footer(app: &App, area: Rect, frame: &mut ratatui::Frame) {
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Length(if !loading_text.is_empty() { 20 } else { if sync_text.is_empty() { 0 } else { 20 } }),
+            Constraint::Length(if !loading_text.is_empty() {
+                20
+            } else if sync_text.is_empty() {
+                0
+            } else {
+                20
+            }),
             Constraint::Min(0),
         ])
         .split(area);
 
     if !loading_text.is_empty() {
         let loading_widget = Paragraph::new(loading_text)
-            .style(Style::default().fg(app.theme.accent).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(app.theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            )
             .alignment(Alignment::Left);
         loading_widget.render(chunks[0], frame.buffer_mut());
     } else if !sync_text.is_empty() {

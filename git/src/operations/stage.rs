@@ -67,8 +67,7 @@ fn parse_hunks_from_diff(diff: &str) -> Vec<DiffHunk> {
             }
 
             // Parse the new hunk header
-            if let Some((old_start, old_count, new_start, new_count)) =
-                DiffHunk::parse_header(line)
+            if let Some((old_start, old_count, new_start, new_count)) = DiffHunk::parse_header(line)
             {
                 current_hunk = Some(DiffHunk {
                     header: line.to_string(),
