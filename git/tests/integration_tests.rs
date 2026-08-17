@@ -1,7 +1,18 @@
 use openisl_git::{
-    get_branches, get_commits, get_current_branch, get_status, Commit, FileStatus, GitRef, RefType,
-    StatusType,
+    get_branches, get_commits, get_commits_filtered, get_current_branch, get_status, Commit,
+    FileStatus, GitRef, RefType, StatusType,
 };
+
+use std::process::Command;
+
+fn git(repo: &std::path::Path, args: &[&str]) {
+    let status = Command::new("git")
+        .args(args)
+        .current_dir(repo)
+        .status()
+        .unwrap();
+    assert!(status.success(), "git {:?} failed", args);
+}
 
 fn create_test_commit(
     hash: &str,
@@ -404,5 +415,34 @@ mod serialization_tests {
 
         assert_eq!(status.path, "src/main.rs");
         assert_eq!(status.status, StatusType::Modified);
+    }
+
+    #[test]
+    fn test_get_commits_filtered_by_branch() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        git(repo, &["init", "-q"]);
+        git(repo, &["config", "user.email", "test@example.com"]);
+        git(repo, &["config", "user.name", "Test"]);
+        std::fs::write(repo.join("a.txt"), "a").unwrap();
+        git(repo, &["add", "a.txt"]);
+        git(repo, &["commit", "-q", "-m", "initial"]);
+        git(repo, &["checkout", "-q", "-b", "feature/x"]);
+        std::fs::write(repo.join("b.txt"), "b").unwrap();
+        git(repo, &["add", "b.txt"]);
+        git(repo, &["commit", "-q", "-m", "feature work"]);
+
+        // default: all branches
+        let all = get_commits_filtered(repo, None, None, false).unwrap();
+        assert_eq!(all.len(), 2);
+
+        // scoped to a single branch
+        let main = get_commits_filtered(repo, None, Some("main"), false).unwrap();
+        assert_eq!(main.len(), 1);
+        assert_eq!(main[0].summary, "initial");
+
+        let feature = get_commits_filtered(repo, None, Some("feature/x"), false).unwrap();
+        assert_eq!(feature.len(), 2);
+        assert_eq!(feature[0].summary, "feature work");
     }
 }

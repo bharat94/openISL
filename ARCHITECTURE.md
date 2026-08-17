@@ -1,448 +1,168 @@
-# Architecture Documentation
+# Architecture
 
 ## About This Document
 
-This document provides an overview of the openISL system architecture, its components, and key design decisions.
-
-## Document Information
-
-| Field | Value |
-|--------|-------|
-| Status | Active |
-| Author | openISL Maintainers |
-| Version | 0.6.0 |
-| Last Updated | 2026-01-11 |
+This document describes the openISL system architecture, its components, and the key design decisions behind them. It reflects the current implementation.
 
 ## System Overview
 
-openISL (Interactive Smart Log) is an intelligent command-line tool that provides:
-1. **Advanced Git Visualization**: Interactive TUI with enhanced commit graphs and syntax-highlighted diffs
-2. **Git Command Wrapper**: Unified interface for common git operations with enhanced features
-3. **Adaptive TUI**: Progressive terminal UI with multiple themes and keyboard-driven navigation
+openISL (Interactive Smart Log) is a terminal-first Git client. It provides:
+
+1. **A Git abstraction layer** (`git/`) — a thin, safe wrapper around the `git` CLI that parses output into typed models.
+2. **A terminal user interface** (`tui/`) — a ratatui-based interactive UI for exploring history, diffs, and stashes, and for staging changes.
+3. **A command-line interface** (`cli/`) — clap-based commands that use both of the above and produce the `openisl` binary.
 
 ### High-Level Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                   User Interface Layer                 │
-│  ┌────────────────────────────────────────────┐     │
-│  │         CLI & Interactive TUI          │     │
-│  └────────────────────┬───────────────────┘     │
-│                       │                              │
-└───────────────────────┼───────────────────────────┘
-                          │
-┌───────────────────────┴───────────────────────────┐
-│                 Application Layer               │
-│  ┌────────────────────────────────────────────┐     │
-│  │ Command Dispatcher & TUI Engine       │     │
-│  └───────────┬───────────────────────────┘     │
-│                │                                   │
-└────────────────┼───────────────────────────────────┘
-                   │
-┌────────────────┴───────────────────────────────────┐
-│               Core Modules Layer                │
-│  ┌──────────┬──────────┬──────────┬────────┐│
-│  │  Diff     │  Commit  │ Git     │ Config ││
-│  │ Parser    │  Tree    │ Wrapper │ Manager ││
-│  │ w/        │          │         │        ││
-│  │  Syntax    │          │         │        ││
-│  │ Highlight │          │         │        ││
-│  └──────────┴──────────┴──────────┴────────┘│
-└──────────────────────────────────────────────────────┘
-```
-┌─────────────────────────────────────────────────────────┐
-│                   User Interface Layer                 │
-│  ┌────────────────────────────────────────────┐     │
-│  │         CLI & Adaptive TUI          │     │
-│  └────────────────────┬───────────────────┘     │
-│                       │                              │
-└───────────────────────┼──────────────────────────┘
-                         │
-┌───────────────────────┴──────────────────────────┐
-│                 Application Layer               │
-│  ┌────────────────────────────────────────────┐     │
-│  │ Command Dispatcher & Intelligence      │     │
-│  └───────────┬──────────────────────────┘     │
-│                │                                   │
-└────────────────┼───────────────────────────────────┘
-                  │
-┌────────────────┴───────────────────────────────────┐
-│               Core Modules Layer                │
-│  ┌──────────┬──────────┬──────────┬────────┐│
-│  │  Smart    │  Smart   │ Adaptive│ Config ││
-│  │ Stack     │   Git   │   TUI   │ Manager ││
-│  │ Analysis  │Abstraction│ Engine  │        ││
-│  └──────────┴──────────┴──────────┴────────┘│
-└──────────────────────────────────────────────────────┘
+                    ┌─────────────────────────────────┐
+                    │        User / Terminal          │
+                    └───────────────┬─────────────────┘
+                                    │
+                 ┌──────────────────┴──────────────────┐
+                 │            openisl binary           │
+                 │               (cli/)                │
+                 │   clap commands ── config manager   │
+                 └───────────────┬─────────────────────┘
+                                 │
+              ┌──────────────────┴──────────────────┐
+              │                 tui/                │
+              │  app (state + view modes)           │
+              │  handlers (keyboard, mouse, ops)    │
+              │  render (commits, diff, panels,     │
+              │          status_bar)                │
+              │  tree (graph layout), theme, diff   │
+              └──────────────────┬──────────────────┘
+                                 │
+              ┌──────────────────┴──────────────────┐
+              │                 git/                │
+              │  command (git subprocess runner)    │
+              │  operations (log, branch, checkout, │
+              │            status, diff, stash, tag,│
+              │            hunk staging, commit ops)│
+              │  models (Commit, GitRef, FileStatus)│
+              │  vcs   (Change, Ref, SyncState)     │
+              └──────────────────┬──────────────────┘
+                                 │
+                              git CLI
 ```
 
-## Core Components
+## Workspace Layout
 
-### 1. Syntax-Highlighted Diff Module
-
-**Purpose**: Parse and display git diffs with language-aware syntax highlighting
-
-**Responsibilities**:
-- Parse unified diff format
-- Detect programming language from file extension (30+ languages)
-- Highlight keywords, types, strings, comments, numbers
-- Apply theme-aware colors for dark/light themes
-- Provide diff statistics (additions, deletions, files changed)
-
-**Key Design Decisions**:
-- **Tokenizer-based**: Custom tokenizer for lightweight syntax highlighting
-- **Language dictionaries**: Separate keyword/type lists per language
-- **Theme support**: Two color palettes (dark/light)
-- **Performance**: Fast tokenization without external dependencies
-
-**Supported Languages**:
-Rust, Python, JavaScript/TypeScript, Go, Java, C/C++, C#, Swift, Kotlin, Ruby, PHP, Lua, Perl, Elixir, Erlang, Clojure, Haskell, OCaml, F#, Nim, V, Zig, HTML, CSS, SCSS, JSON, YAML, XML, Bash, TOML, Markdown, SQL, R
-
-**Data Flow**:
 ```
-Git Diff Output
-     ↓
-Diff Parser (unified format)
-     ↓
-Language Detector (file extension)
-     ↓
-Syntax Highlighter (tokenizer)
-     ↓
-Themed Output (dark/light)
-     ↓
-TUI Display
+openISL/
+├── cli/     Command-line interface; produces the `openisl` binary
+├── tui/     Terminal user interface (ratatui + crossterm)
+├── git/     Git abstraction layer (git subprocess wrapper)
+├── docs/    Documentation
+└── Cargo.toml  Workspace manifest (shared deps, version, metadata)
 ```
 
-### 2. Commit Tree Module
+### 1. The Git Abstraction Layer (`git/`)
 
-**Purpose**: Build and visualize git commit history with enhanced graph representation
+**Purpose**: provide a safe, typed interface over the `git` CLI.
 
-**Responsibilities**:
-- Parse commit graph with parent-child relationships
-- Detect commit type (Initial, Merge, Tag, Revert, Squash, Branch, Regular)
-- Track branch lanes and assign colors
-- Generate visual commit tree with ASCII/Unicode symbols
-- Format commit details with time, author, branch info
+**Modules**:
+- `command.rs` — `run`/`run_raw` subprocess helpers plus repository detection (`is_git_repo`, `find_repo_root`).
+- `models.rs` — typed data models: `Commit`, `GitRef`, `RefType`, `FileStatus`, `StatusType`, `Remote`, `Tag`.
+- `operations/` — one module per concern:
+  - `log.rs` — `get_commits`, `get_commits_filtered` (branch/remote scoping), date parsing.
+  - `branch.rs`, `checkout.rs`, `diff.rs`, `status.rs`, `remote.rs`, `tag.rs`, `stash.rs`, `editor.rs`.
+  - `commit_ops.rs` — amend, drop, squash, cherry-pick, revert, reword.
+  - `hunk.rs` — file hunks and line-level staging via `git apply --cached`.
+  - `smartlog.rs` — ASCII tree formatter (`SmartLogFormatter`).
+- `vcs/` — VCS-agnostic types (`Change`, `Ref`, `SyncState`) intended to decouple the UI from Git specifics.
 
-**Key Design Decisions**:
-- **Commit type classification**: Analyze commit message and structure
-- **Lane-based visualization**: Track branch lanes for merge visualization
-- **Distinct symbols**: Unicode characters for different commit types
-- **Color assignment**: 8 distinct lane colors for better visualization
+**Key design decisions**:
+- **Subprocess over bindings**: shell out to `git` (via `std::process::Command`) rather than linking `libgit2`. This keeps behavior identical to the user's installed Git and avoids FFI complexity.
+- **Typed parsing**: `git log`/`git status`/`git branch` output is parsed into `Commit`, `FileStatus`, etc., so callers never touch raw text.
+- **Real operations**: TUI actions map to real Git commands (`apply`, `checkout`, `branch`, `stash`, …); nothing is display-only.
 
-**Commit Types**:
-- Initial (┌●): First commit with no parents
-- Merge (┼●): Merge commit with multiple parents
-- Tag (◆●): Commit with tag reference
-- Revert (↩●): Commit that reverts a previous commit
-- Squash (≡●): Squash commit
-- Branch (┬●): Branch point with multiple children
-- Regular (─●): Normal commit
+### 2. The Terminal User Interface (`tui/`)
 
-**Data Flow**:
-```
-Git Log Output
-     ↓
-Commit Parser (parent relationships)
-     ↓
-Commit Type Detector (message/structure)
-     ↓
-Tree Builder (lane assignment)
-     ↓
-Graph Renderer (symbols + colors)
-     ↓
-TUI Display
-```
+**Purpose**: keyboard-driven exploration and manipulation of a repository.
 
-### 3. Smart Git Abstraction Module
+**Key design decisions**:
+- **Framework**: [ratatui](https://github.com/ratatui-org/ratatui) with [crossterm](https://github.com/crossterm-rs/crossterm) for events.
+- **Central app state**: a single `App` struct owns all state and view-mode transitions.
+- **Module layout** (result of splitting a monolithic `app.rs`):
+  - `app/state.rs` — types: `App`, `ViewMode`, `PanelType`, filters, selection state.
+  - `app/handlers/` — `keyboard.rs`, `mouse.rs`, `commit_ops.rs`: key/mouse dispatch and operations. Global keys (e.g. `?` for help) are intercepted in `handle_key` before per-view dispatch.
+  - `app/render/` — `commits.rs`, `diff.rs`, `panels.rs`, `status_bar.rs`: rendering per view. `render/mod.rs` re-exports them `pub(crate)`.
+  - `tree.rs` — commit graph layout (lanes, branch points, colors).
+  - `theme.rs` — 4 themes (dark, light, Monokai, Nord).
+  - `keybindings.rs` — the keybinding config model (TOML-loadable).
+  - `diff.rs` — language-aware syntax highlighting for diffs.
+- **View modes**: `List`, `Details`, `Diff`, `Help`, `InputBranch`, `Search`, `BranchSearch`, `Filter`, `Stats`, `CommandPalette`, `Stash`, `HunkStaging`.
 
-**Purpose**: Provide intelligent, user-friendly commands with context-aware suggestions for git operations
+### 3. The Command-Line Interface (`cli/`)
 
-**Responsibilities**:
-- Detect git repositories and find repo root from any subdirectory
-- Parse openISL commands
-- Map to git subcommands with safe execution
-- Provide helpful error messages with actionable suggestions
-- Execute git operations (log, branch, checkout, status, diff, remote, tag, stash)
-- Handle commit operations (amend, drop, squash, cherry-pick, revert)
-- Handle file operations (stage, unstage, stash)
+**Purpose**: the `openisl` binary.
 
-**Key Design Decisions**:
-- **Safe execution**: Validate operations before execution
-- **Dry-run mode**: Preview changes without executing (display only)
-- **Error handling**: Clear messages with suggestions
-- **Commit operations**: Wrapper around rebase/cherry-pick for advanced operations
+- **Argument parsing**: clap derive; commands mirror common Git workflows (`log`, `tui`, `branch`, `checkout`, `status`, `diff`, `config`, `remote`, `tag`).
+- **Config**: `cli/src/config/` loads `~/.config/openisl/config.toml` (plus `OPENISL_*` environment overrides) into a typed `Config` with `general`, `tui`, and `git` sections.
 
-**Command Examples**:
-```
-openisl log [options]     → git log [options] with enhanced visualization
-openisl branch [name]      → git branch [name] or git checkout -b [name]
-openisl checkout <target>    → git checkout <target>
-openisl status              → git status
-openisl diff [options]      → git diff [options]
-openisl remote --list       → git remote -v
-openisl tag --list          → git tag -l
-openisl tag --create v1.0.0 → git tag v1.0.0
-```
+## Data Models
 
-**Data Flow**:
-```
-User Command
-     ↓
-Repository Detection (find .git directory)
-     ↓
-Git Command Execution (via CLI wrapper)
-     ↓
-Output Parsing
-     ↓
-Data Models (Commit, GitRef, etc.)
-     ↓
-UI/CLI Display
-```
-
-### 3. Interactive TUI Engine Module
-
-**Purpose**: Progressive terminal user interface for exploring git history and managing files
-
-**Responsibilities**:
-- Render commit tree with enhanced visualization
-- Handle keyboard input and navigation
-- Display syntax-highlighted diffs
-- Show git history with commit graph
-- Manage application state with multiple view modes
-- Support multiple panels (commits, branches, files)
-- Implement search and filter functionality
-- Display repository statistics
-
-**Key Design Decisions**:
-- **Framework**: Use [ratatui](https://github.com/ratatui-org/ratatui) for Rust TUI
-- **Component-based**: Reusable UI components
-- **State management**: Central state with view modes
-- **Theme system**: 4 built-in themes (dark, light, monokai, nord)
-- **Keyboard-first**: Full keyboard navigation with optional mouse support
-- **Multiple view modes**: List, Details, Diff, Help, Stats, Filter, CommandPalette
-
-**View Modes**:
-- **List**: Commit tree with navigation
-- **Details**: Full commit information
-- **Diff**: Syntax-highlighted diff viewer
-- **Help**: Keyboard shortcuts overlay
-- **Stats**: Repository statistics (commits by author, activity)
-- **Filter**: Filter commits by author, message, date
-- **CommandPalette**: Searchable command list
-
-**UI Components**:
-- Enhanced commit tree with type-specific symbols
-- Syntax-highlighted diff viewer
-- File status panel with stage/unstage actions
-- Branch list panel
-- Repository statistics display
-- Command palette for quick access
-- Help overlay with all shortcuts
-- Status bar with current mode info
-
-**Theme System**:
-- Dark theme (default)
-- Light theme
-- Monokai theme
-- Nord theme
-- Theme-aware syntax highlighting colors
-
-### 4. Configuration Manager
-
-**Purpose**: Handle application configuration
-
-**Responsibilities**:
-- Load configuration from multiple sources:
-  - Command-line flags
-  - Config file (~/.config/openisl/config.toml)
-  - Environment variables
-  - Repository-specific config (.openisl/)
-- Merge configuration with precedence
-- Persist user preferences
-
-**Configuration Hierarchy**:
-1. Command-line flags (highest precedence)
-2. Environment variables
-3. Repository config (.openisl/config.toml)
-4. User config (~/.config/openisl/config.toml)
-5. Default values (lowest precedence)
-
-### Data Models
-
-openISL uses several core data models for representing git data:
-
-#### Commit
-Represents a single git commit with full metadata:
-```
+```rust
 Commit {
-    hash: String,           // Full SHA-1 hash
-    short_hash: String,     // 7-character abbreviated hash
-    message: String,        // Full commit message
-    summary: String,        // First line of message
-    author: String,         // Author name
-    email: String,          // Author email
-    date: DateTime<Utc>,    // Commit timestamp
-    parent_hashes: Vec<String>,  // Parent commit hashes
-    refs: Vec<GitRef>,      // Associated refs (branches, tags)
+    hash, short_hash: String,
+    message, summary:   String,
+    author, email:      String,
+    date:               DateTime<Utc>,
+    parent_hashes:      Vec<String>,
+    refs:               Vec<GitRef>,
 }
+
+GitRef { name: String, ref_type: RefType }
+// RefType: Head | Branch | Tag | Remote
+
+FileStatus { path: String, status: StatusType }
+// StatusType: Modified, Added, Deleted, Untracked,
+//              ModifiedStaged, AddedStaged, DeletedStaged,
+//              Renamed, Conflicted
+
+Hunk { old_start, old_lines, new_start, new_lines, lines: Vec<HunkLine>, is_staged }
+HunkLine { line_type: HunkLineType, content: String, is_selected }
+// HunkLineType: Context | Addition | Deletion
 ```
 
-#### GitRef
-Represents a git reference (branch, tag, HEAD):
-```
-GitRef {
-    name: String,      // Ref name (e.g., "main", "v1.0.0")
-    ref_type: RefType, // Branch, Tag, Remote, or Head
-}
-```
+All models implement `Serialize`/`Deserialize` and `Display` where useful.
 
-#### RefType Enum
-```
-enum RefType {
-    Head,      // HEAD pointer
-    Branch,    // Local branch
-    Tag,       // Tag reference
-    Remote,    // Remote branch
-}
-```
+## Hunk Staging
 
-All models implement `Serialize` and `Deserialize` for potential export and `Display` for debugging.
+The TUI's hunk-staging mode performs real, line-precise staging:
 
-## Cross-Cutting Concerns
+1. `get_file_diff_hunks` returns hunks for a file — unstaged hunks come from the working tree (`git diff`), staged hunks from the index (`git diff --cached`).
+2. `stage_hunk`/`unstage_hunk` apply a single hunk's patch with `git apply --cached` (or `--cached --reverse`).
+3. `stage_hunk_lines`/`unstage_hunk_lines` build a partial patch for the selected lines (recomputing the `---`/`+++` headers and hunk ranges) and apply it with `--unidiff-zero`.
 
-### Error Handling
+This gives true per-line staging without a full index rewrite.
 
-**Strategy**: Use Rust's `Result<T, E>` for recoverable errors
+## Configuration
 
-```
-use std::result::Result;
+Configuration is owned by the CLI crate and consumed by the TUI at launch:
 
-pub fn detect_stack(path: &Path) -> Result<Stack, Error> {
-    // Implementation
-}
-```
+- File: `~/.config/openisl/config.toml`
+- Precedence (lowest → highest): defaults → config file → `OPENISL_*` environment variables → CLI flags.
 
-**Error Types**:
-- **User errors**: Incorrect usage, missing files
-- **System errors**: Permission denied, file system errors
-- **Network errors**: Git operations, remote fetch failures
-- **Parsing errors**: Invalid config files, corrupted data
+See [Configuration reference](docs/cli-commands/config.md).
 
-### Logging
+## Testing Strategy
 
-**Levels**:
-- Error: Critical failures
-- Warn: Non-critical issues
-- Info: Normal operation flow
-- Debug: Detailed diagnostics (disabled by default)
+- **Unit tests** live in `#[cfg(test)]` modules across all crates (parsing, view-mode transitions, navigation, rendering logic).
+- **Integration tests** (`git/tests/`) create real temporary repositories with `tempfile` and exercise actual Git operations (hunk staging, branch filtering, status parsing).
+- **CI** (`.github/workflows/ci.yml`) runs `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and `cargo test --all` on every push/PR.
 
-**Implementation**: Use `env_logger` or `tracing` crate
+## Error Handling
 
-### Testing Strategy
-
-**Unit Tests**:
-- Test individual functions and modules
-- Mock external dependencies (git, file system)
-- Test edge cases and error paths
-
-**Integration Tests**:
-- Test with real git repositories
-- Test stack detection on sample projects
-- Verify git command mappings
-
-**E2E Tests**:
-- Complete workflow tests
-- User journey testing
-- Smoke tests on release candidates
-
-## Technology Decisions
-
-### Language and Framework
-
-**Choice**: Rust
-
-**Rationale**:
-- Performance: Fast execution for file scanning
-- Safety: Memory safety and error handling
-- Ecosystem: Great CLI/TUI libraries (clap, bubble, ratatui)
-- Distribution: Single binary via cargo install
-
-### Dependencies
-
-**Key Dependencies** (planned):
-- `clap`: Command-line argument parsing
-- `bubble`: Terminal UI framework
-- `git2` or `libgit2`: Git operations
-- `serde`/`serde_json`: Configuration and data serialization
-- `tokio` or `async-std`: Async operations
-
-## Security Considerations
-
-### File System Access
-- Validate paths to prevent directory traversal
-- Check file permissions before operations
-- Sanitize user input for file paths
-
-### Git Operations
-- Validate commands before execution
-- Sanitize user input for branch names, commit messages
-- Use safe-by-default approach (confirm destructive operations)
-
-### Secrets Management
-- Never read `.env` files
-- Never log sensitive data
-- Clear environment variables after use
-
-## Performance Considerations
-
-### Stack Detection
-- Cache results per repository
-- Parallel file scanning where possible
-- Lazy loading of deep dependencies
-
-### TUI Rendering
-- Use incremental rendering
-- Cache rendered components
-- Minimize redraws
+- The `git/` crate defines `GitError` (thiserror) for its own errors and uses `anyhow::Context` to enrich messages with the operation and path.
+- CLI and TUI propagate errors with `anyhow::Result`; the CLI prints actionable messages on failure and exits non-zero.
 
 ## Future Enhancements
 
-### Planned Features
-
-- **Status Bar Enhancements**: More useful status information
-- **Collapsible Diff Sections**: Better handling of large diffs
-- **Loading States and Progress Indicators**: Better UX during operations
-- **Interactive Rebase**: Visual rebase conflict resolution
-- **Blame Viewer**: Line-by-line commit history
-- **Reflog Browser**: Navigate repository reflog
-- **Custom Themes**: User-defined theme files
-- **Gitignore Integration**: Interactive .gitignore management
-- **Stash Browser**: Visual stash viewer with diff preview
-
-### Architecture Evolution
-
-- **Async I/O**: Improve performance with async git operations
-- **Plugin System**: Custom diff parsers and themes
-- **Multi-Repo Support**: View and compare multiple repositories
-- **Export Formats**: Export commit graph as SVG, Mermaid, or JSON
-- **Remote Operations**: Direct integration with remote repositories
-- **Web UI**: Browser-based interface for visualization
-
-## References
-
-### Documentation
-- [Diátaxis Framework](https://diataxis.fr/)
-- [Open Source Standards](OPEN_SOURCE_STANDARDS.md)
-- [arc42 Template](https://arc42.org/)
-
-### Rust Ecosystem
-- [Rust CLI Guidelines](https://rust-lang.github.io/api-guidelines/)
-- [TUI Libraries Comparison](https://github.com/rothgar/awesome-tuis)
-
----
-
-This architecture document will be updated as openISL evolves.
-
-**Last Updated**: 2026-01-11
-**Next Review**: After next feature release
+- Wire the `keybindings.toml` model into the actual key dispatch (today the config model exists but handlers match raw keycodes).
+- Async Git operations to keep the UI responsive on very large repositories.
+- Interactive rebase, blame viewer, and reflog browser.
+- Custom user-defined themes.
+- Multi-repo support and remote integrations.

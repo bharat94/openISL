@@ -1,6 +1,6 @@
 # openisl log
 
-Show commit log with optional filtering and formatting.
+Show commit history with optional filtering and formatting.
 
 ## Synopsis
 
@@ -10,39 +10,55 @@ openisl log [OPTIONS]
 
 ## Description
 
-Displays the commit history for the current repository. By default, shows all commits with author, date, and message summary.
+Displays the commit history for the current repository. By default it shows commits from **all** branches (local and remote-tracking) with the author, date, and summary of each commit.
 
 ## Options
 
-- `--simple`: Show as ASCII text instead of launching TUI
-- `--all`: Show commits from all branches
-- `--no-remote`: Hide remote branch commits
-- `-n, --max-count <N>`: Limit to N most recent commits
-- `-h, --help`: Show help for log command
+| Option | Description |
+|--------|-------------|
+| `--simple` | Render the history as an ASCII commit tree instead of the text list |
+| `-b, --branch <name>` | Show commits reachable from the given branch only |
+| `--remote` | Show commits from remote-tracking branches only |
+| `-n, --max-count <N>` | Limit to the N most recent commits |
+| `-h, --help` | Show help |
+
+Precedence: `--branch` wins over `--remote`; otherwise the default is all branches.
 
 ## Examples
 
 Show all commits:
+
 ```bash
 openisl log
 ```
 
-Show last 10 commits:
+Show the last 10 commits:
+
 ```bash
 openisl log -n 10
 ```
 
-Show commits as text (no TUI):
+Show commits on a specific branch:
+
+```bash
+openisl log --branch develop
+```
+
+Show only remote-tracking commits:
+
+```bash
+openisl log --remote
+```
+
+Render the history as an ASCII tree:
+
 ```bash
 openisl log --simple
 ```
 
-Show only local commits:
-```bash
-openisl log --no-remote
-```
-
 ## Output Format
+
+Text mode:
 
 ```
 Commit Log (N commits):
@@ -58,7 +74,13 @@ def456g - Second commit summary
 
 ## Performance
 
-For large repositories (1000+ commits), use `--max-count` to limit output:
+`--max-count` limits how many commits are read from Git:
+
 - 100 commits: < 50ms
 - 1000 commits: < 200ms
-- 10000+ commits: Use `--max-count` for faster results
+- 10000+ commits: use `-n` for faster results
+
+## See Also
+
+- [openisl tui](tui.md) - Interactive terminal UI for the same history
+- [openisl branch](branch.md) - List or create branches

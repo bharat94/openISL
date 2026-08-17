@@ -1,6 +1,6 @@
 # openisl diff
 
-Show changes between commits, staging area, and working directory.
+Show changes between commits, the staging area, and the working directory.
 
 ## Synopsis
 
@@ -10,30 +10,35 @@ openisl diff [OPTIONS] [COMMIT]
 
 ## Description
 
-Displays differences between commits, the staging area, and working directory in unified diff format.
+Displays differences in unified diff format. With no arguments, shows changes between the working directory and the staging area. Use `--staged` to compare the staging area against the last commit, or pass a `COMMIT` to compare that commit against its parent.
 
 ## Arguments
 
-- `COMMIT`: Specific commit to show diff for (optional)
+- `COMMIT`: Full or short commit hash to show the diff for (optional)
 
 ## Options
 
-- `--staged`: Show staged changes (vs. last commit)
-- `-h, --help`: Show help for diff command
+| Option | Description |
+|--------|-------------|
+| `--staged` | Show staged changes (index vs. last commit) |
+| `-h, --help` | Show help |
 
 ## Examples
 
-Show all changes in working directory:
+Show unstaged changes in the working directory:
+
 ```bash
 openisl diff
 ```
 
 Show staged changes:
+
 ```bash
 openisl diff --staged
 ```
 
-Show changes in a specific commit:
+Show the changes introduced by a specific commit:
+
 ```bash
 openisl diff abc1234
 ```
@@ -53,12 +58,6 @@ index 1234567..89abcde 100644
      println!("World");
  }
 ```
-
-## Color Legend
-
-- Green lines: Added
-- Red lines: Deleted
-- Cyan headers: File metadata
 
 ## See Also
 

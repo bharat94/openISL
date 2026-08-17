@@ -9,6 +9,10 @@ readme.workspace = true
 keywords.workspace = true
 categories.workspace = true
 
+[[bin]]
+name = "openisl"
+path = "src/main.rs"
+
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }

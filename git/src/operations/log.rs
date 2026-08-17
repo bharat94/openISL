@@ -13,15 +13,40 @@ static TIMEZONE_REGEX: LazyLock<Regex> =
 const GIT_LOG_FORMAT: &str = "%H|%P|%an|%ae|%ad|%s";
 
 pub fn get_commits(repo_path: &Path, max_count: Option<usize>) -> Result<Vec<Commit>> {
+    get_commits_filtered(repo_path, max_count, None, false)
+}
+
+/// Fetches commits, optionally scoped to a single branch or to
+/// remote-tracking branches only.
+///
+/// * `branch` - Restrict the log to a specific branch (takes precedence over `remote`).
+/// * `remote` - Restrict the log to remote-tracking branches only.
+pub fn get_commits_filtered(
+    repo_path: &Path,
+    max_count: Option<usize>,
+    branch: Option<&str>,
+    remote: bool,
+) -> Result<Vec<Commit>> {
     let format_arg = format!("--format={}", GIT_LOG_FORMAT);
     let n_arg = max_count.map(|n| format!("-n{}", n));
 
-    let mut args: Vec<&str> = vec!["log", "--all", "--date=iso", &format_arg];
-    if let Some(ref n) = n_arg {
+    let scope: String = match branch {
+        Some(name) => name.to_string(),
+        None if remote => "--remotes".to_string(),
+        None => "--all".to_string(),
+    };
+
+    let mut args: Vec<String> = Vec::with_capacity(5);
+    args.push("log".to_string());
+    args.push("--date=iso".to_string());
+    args.push(format_arg);
+    args.push(scope);
+    if let Some(n) = n_arg {
         args.push(n);
     }
 
-    let output = run(&args, Some(repo_path))
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let output = run(&arg_refs, Some(repo_path))
         .with_context(|| format!("Failed to get git log from {}", repo_path.display()))?;
 
     parse_commits(&output)

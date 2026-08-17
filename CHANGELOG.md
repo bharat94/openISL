@@ -6,6 +6,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Hunk and line staging**: stage/unstage individual hunks or single lines
+  from the TUI (`i` in Diff view, then `Space` to select, `s`/`u` to stage),
+  backed by real `git apply --cached` patches
+- **Dedicated stash management view**: list stashes with diff preview, apply,
+  drop, and pop (`a`/`d`/`p`)
+- **Command palette**: searchable action list via `Ctrl+P`
+- **Branch search**: filter branches in the sidebar with `/`
+- **Commit operations**: amend (`A`), drop (`D`), squash (`S`), cherry-pick
+  (`C`), and revert (`R`) wired to Git
+- **Syntax highlighting for diffs**: language-aware coloring for 30+ languages
+- **Enhanced commit graph**: type-specific symbols (merge, tag, revert, squash,
+  branch point), lane colors, and tag display
+- **Granular theming**: 4 themes (dark, light, Monokai, Nord) with theme-aware
+  syntax colors; `t` cycles themes
+- **VCS-agnostic layer**: `git/vcs` module with `Change`, `Ref`, and `SyncState`
+  types for remote sync status
+- **External editor integration** and **progress indicators** for long operations
+- **Help overlay reachable from all views**: `?` opens help from any view
+  except the command palette; content documents the real keymap
+- **Git diff filtering**: `get_commits_filtered` supports `--branch` and
+  `--remote` scoping in `openisl log`
+- **CI workflow**: `fmt`, `clippy -D warnings`, and `test` on GitHub Actions
+
+### Changed
+- **Refactored the TUI**: the monolithic `app.rs` (4400+ lines) was split into
+  `state.rs`, `handlers/` (keyboard, mouse, commit_ops), and `render/`
+  (commits, diff, panels, status_bar) submodules
+- **`openisl tui` launches the real TUI** (previously a placeholder message);
+  `openisl branch <name>` and `openisl checkout <target>` now perform real Git
+  operations instead of printing placeholder text
+- **Hunk staging correctness**: unstaged hunks now come from the working tree
+  (`git diff`) instead of `--no-index`; staged/unstaged operations no longer
+  suffer from index mismatch
+- **CLI binary renamed to `openisl`** (was `openisl-cli`)
+- **`openisl diff` honors `--staged` and `[COMMIT]`** (previously ignored)
+- **`openisl log` honors `--branch` and `--remote`** (previously ignored);
+  `-n`/`--max-count` short flag is now `-n` (was auto-derived `-m`)
+
+### Fixed
+- Clippy warnings across the workspace (`-D warnings` clean)
+- Date parsing for git timezone offsets
+- Stubbed git operations replaced with real implementations
+- Failing command palette and hunk staging tests
+
+### Documentation
+- Rewrote `README.md`: removed duplicated sections, dead links, and inaccurate
+  commands; aligned the TUI keymap, installation, and CLI examples with reality
+- Added CLI reference pages for `tui`, `config`, `remote`, and `tag`
+- Updated the CLI reference (`log`, `branch`, `checkout`, `status`, `diff`),
+  the TUI reference, `ARCHITECTURE.md`, `AGENTS.md`, and `CONTRIBUTING.md` to
+  match the current code (removed references to the non-existent `stack` crate
+  and `crates/` directory)
+
 ## [0.3.0] - 2026-01-10
 
 ### Added

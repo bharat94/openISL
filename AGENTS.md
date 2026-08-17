@@ -8,6 +8,7 @@ This file provides guidance for agentic coding tools working in the openISL repo
 ```bash
 cargo build              # Debug build
 cargo build --release    # Release build (optimized)
+cargo run -p openisl-cli -- <args>   # Run the CLI without installing
 ```
 
 ### Linting & Formatting
@@ -15,24 +16,23 @@ cargo build --release    # Release build (optimized)
 cargo fmt               # Format code
 cargo fmt --check       # Check formatting (CI)
 cargo clippy            # Run linter
-cargo clippy -- -D warnings  # Treat warnings as errors
+cargo clippy --all-targets -- -D warnings  # Treat warnings as errors (CI)
 ```
 
 ### Testing
 ```bash
-cargo test              # Run all tests
-cargo test --all-features  # Run with all features enabled
-cargo test --test integration  # Run integration tests only
-cargo test --test integration --features git-tests  # Integration with git tests
+cargo test              # Run all workspace tests
+cargo test -p openisl-git    # Test the git crate only
+cargo test -p openisl-tui    # Test the TUI crate only
+cargo test -p openisl-cli    # Test the CLI crate only
 
 # Run a single test
 cargo test test_name           # Test by name
 cargo test -- --exact test_name  # Exact match
-
-# Run tests for specific module
-cargo test --lib module_name
-cargo test --package crate_name
 ```
+
+CI runs `cargo fmt --all -- --check`, `cargo clippy --all-targets -- -D warnings`,
+and `cargo test --all` (see `.github/workflows/ci.yml`). Keep all three green.
 
 ### Coverage
 ```bash
@@ -42,8 +42,7 @@ open tarpaulin-report.html     # View coverage
 
 ### Installation
 ```bash
-cargo install --path .         # Install from local source
-cargo build --release && cargo install --path .  # Release build + install
+cargo install --path cli      # Install the openisl binary from source
 ```
 
 ## Code Style Guidelines
@@ -66,7 +65,7 @@ cargo build --release && cargo install --path .  # Release build + install
 ```rust
 use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
-use crate::stack::StackAnalyzer;
+use crate::operations::get_commits;
 ```
 
 ### Types & Naming
@@ -78,10 +77,10 @@ use crate::stack::StackAnalyzer;
 - Use descriptive names that reveal intent
 
 ```rust
-struct StackAnalyzer { }
-fn detect_stack(path: &Path) -> Result<Stack> { }
-const MAX_DEPTH: usize = 10;
-let is_valid = true;
+struct CommitList { }
+fn get_commits(path: &Path) -> Result<Vec<Commit>> { }
+const MAX_COMMITS: usize = 100;
+let is_dirty = true;
 ```
 
 ### Error Handling
@@ -95,10 +94,9 @@ let is_valid = true;
 ```rust
 use anyhow::{Context, Result};
 
-fn parse_config(path: &Path) -> Result<Config> {
-    let content = std::fs::read_to_string(path)
-        .with_context(|| format!("Failed to read config from {}", path.display()))?;
-    toml::from_str(&content).context("Failed to parse config")
+fn get_diff(path: &Path) -> Result<String> {
+    run(&["diff"], Some(path))
+        .with_context(|| format!("Failed to get diff in {}", path.display()))
 }
 ```
 
@@ -110,29 +108,17 @@ fn parse_config(path: &Path) -> Result<Config> {
 - Run `cargo doc --no-deps` to verify docs
 
 ```rust
-/// Analyzes a git repository to detect the technology stack.
-///
-/// Scans dependency files and source code to identify:
-/// - Programming languages used
-/// - Frameworks and libraries
-/// - Build tools and package managers
+/// Fetches commits, optionally scoped to a single branch.
 ///
 /// # Arguments
 ///
-/// * `path` - Path to the git repository root
+/// * `repo_path` - Path to the git repository
+/// * `max_count` - Maximum number of commits to return
 ///
 /// # Returns
 ///
-/// A `Stack` object containing detected technologies and relationships
-///
-/// # Example
-///
-/// ```no_run
-/// use openisl_stack::detect_stack;
-/// let stack = detect_stack(Path::new("./my-project"))?;
-/// println!("Detected: {:?}", stack.languages);
-/// ```
-pub fn detect_stack(path: &Path) -> Result<Stack> {
+/// A `Vec<Commit>` ordered newest first.
+pub fn get_commits(repo_path: &Path, max_count: Option<usize>) -> Result<Vec<Commit>> {
     // Implementation
 }
 ```
@@ -142,7 +128,8 @@ pub fn detect_stack(path: &Path) -> Result<Stack> {
 - Use descriptive test names that describe what is being tested
 - Use `assert_eq!`/`assert_ne!` with meaningful messages
 - Test both success and error paths
-- Mock external dependencies (git, file system)
+- Mock external dependencies (git, file system); the `git` crate has
+  integration tests that create real temporary repos with `tempfile`
 - Follow Arrange-Act-Assert pattern
 
 ```rust
@@ -151,18 +138,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_detect_stack_with_nodejs_project() {
+    fn test_get_commits_returns_commits() {
         // Arrange
-        let temp_dir = create_test_repo();
-        write_package_json(&temp_dir);
+        let repo_path = std::env::current_dir().unwrap();
 
         // Act
-        let result = detect_stack(&temp_dir);
+        let result = get_commits(&repo_path, Some(5));
 
         // Assert
         assert!(result.is_ok());
-        let stack = result.unwrap();
-        assert!(stack.contains("nodejs"));
+        assert!(!result.unwrap().is_empty());
     }
 }
 ```
@@ -181,19 +166,25 @@ Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `perf`, `ci`
 Add `!` for breaking changes: `feat(api)!`
 
 Examples:
-- `feat(stack): add Python 3.12 support`
-- `fix(cli): resolve branch detection in monorepos`
-- `docs(tui): update installation guide`
+- `feat(git): add branch-filtered commit history`
+- `fix(tui): make help reachable from all views`
+- `docs: update CLI reference`
 
 ## Project Structure
 
-This is a Cargo workspace with 4 crates:
-- `cli/` - Command-line interface (argument parsing, command execution)
-- `tui/` - Terminal user interface (interactive UI, visualization)
-- `stack/` - Stack detection and analysis (technology detection, dependency parsing)
-- `git/` - Git abstraction layer (git operations, command mapping)
+This is a Cargo workspace with 3 crates:
+- `cli/` - Command-line interface (arg parsing, command execution; produces the `openisl` binary)
+- `tui/` - Terminal user interface (interactive UI, keyboard/mouse handling, rendering)
+- `git/` - Git abstraction layer (git operations, command mapping, parsing)
 
 Each crate should remain focused on its responsibilities. Share common types via workspace dependencies.
+
+The TUI crate is organized as:
+- `tui/src/app/` - `mod.rs` (app state), `state.rs` (types), `handlers/` (keyboard, mouse, commit_ops), `render/` (commits, diff, panels, status_bar)
+- `tui/src/tree.rs` - commit graph layout
+- `tui/src/theme.rs` - color themes
+- `tui/src/keybindings.rs` - keybinding config model
+- `tui/src/diff.rs` - syntax highlighting
 
 ## Best Practices
 
@@ -207,3 +198,4 @@ Each crate should remain focused on its responsibilities. Share common types via
 - Use `dbg!()` for debugging, remove before committing
 - Never commit `.env` files or secrets
 - Always run tests before committing changes
+- Update documentation (README, CHANGELOG, docs/) when behavior changes

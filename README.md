@@ -1,316 +1,154 @@
-# openISL
+# openISL — Interactive Smart Log
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![CI/CD](https://img.shields.io/badge/CI%2FCD-Passing-success.svg)](https://github.com/bharat94/openISL/actions)
-[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.1%20adopted-ff69b4.svg)](https://www.contributor-covenant.org/version/2/1/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/bharat94/openISL/ci.yml?branch=main&label=CI)](https://github.com/bharat94/openISL/actions)
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.1%20adopted-ff69b4.svg)](CODE_OF_CONDUCT.md)
+[![Rust](https://img.shields.io/badge/Rust-2021%20Edition-orange.svg)](https://www.rust-lang.org/)
 
-**openISL** - Interactive Smart Log - An intelligent CLI/TUI tool that enhances git workflow with advanced visualization, keyboard-driven navigation, and powerful commit history exploration.
-
-## Overview
-
-openISL is a modern Rust-based command-line tool that provides:
-- **Advanced Git Visualization**: Interactive TUI with enhanced commit graph showing branch relationships
-- **Comprehensive Git Operations**: Complete git wrapper for all common workflows
-- **Syntax-Highlighted Diffs**: Color-coded diffs with 30+ language support
-- **Interactive TUI**: Progressive terminal UI for exploring git history
-- **Theme Support**: Dark, light, Monokai, and Nord themes
-- **Keyboard-Driven Workflow**: Full keyboard navigation and command palette
+**openISL** (Interactive Smart Log) is a fast, keyboard-driven Git client for the terminal. It pairs a rich interactive TUI with a complete command-line wrapper around Git: visualize commit history with an enhanced commit graph, browse syntax-highlighted diffs, and stage changes hunk-by-hunk — all without leaving your terminal.
 
 ## Features
 
-### 🚀 Core Functionality
-- **Smart Log Visualization**: Enhanced commit tree with distinct symbols for different commit types:
-  - Initial commits (┌●)
-  - Merge commits (┼●)
-  - Tagged commits (◆●)
-  - Revert commits (↩●)
-  - Squash commits (≡●)
-  - Branch points (┬●)
-  - Regular commits (─●)
-- **Syntax-Highlighted Diffs**: Auto-detects 30+ languages with keyword, type, string, and comment highlighting
-- **Interactive TUI**: Full keyboard-driven exploration with multiple view modes
-- **Git Operations Wrapper**: Complete git commands (log, branch, checkout, status, diff, remote, tag)
-- **Theme System**: 4 built-in themes with dark/light variants
-- **Customizable Keybindings**: Configure keyboard shortcuts via config file
-
-### 🎯 Key Benefits
-- **Clear Visualization**: Enhanced commit graph with commit type indicators
-- **Fast Navigation**: Vim-style keyboard shortcuts and efficient panel switching
-- **Rich Diff View**: Syntax-highlighted code changes with language detection
-- **Search & Filter**: Search commits by author, message, or hash
-- **Statistics**: Repository insights (commits by author, activity timeline)
-- **Flexible Configuration**: Per-project and user-level config files
+- **Interactive TUI** — commit graph with type-specific symbols and branch lanes, a sidebar (branches, file status, stashes), and multiple view modes: details, diff, statistics, search, filter, and hunk staging.
+- **Syntax-highlighted diffs** — language-aware coloring for 30+ languages with auto-detection from file extensions.
+- **Hunk & line staging** — stage individual hunks or even single lines of a file, unstaged and staged, directly from the TUI.
+- **Search, filter & stats** — find commits by message/author/hash, filter by author/message/date, and get repository statistics.
+- **Commit operations** — amend, drop, squash, cherry-pick, and revert from the TUI.
+- **Command palette & themes** — searchable actions, plus dark, light, Monokai, and Nord themes.
+- **Git command wrapper** — `log`, `branch`, `checkout`, `status`, `diff`, `remote`, and `tag` with smart output.
 
 ## Installation
 
-### From Source
+### Prerequisites
+
+- Rust (1.70 or later) — [rustup](https://rustup.rs/)
+- Git (2.0 or later)
+
+### From source
+
 ```bash
 git clone https://github.com/bharat94/openISL.git
 cd openISL
-cargo build --release
-cargo install --path .
+cargo install --path cli
 ```
 
-### Using Cargo
+This builds and installs the `openisl` binary. Verify with:
+
 ```bash
-cargo install openisl
+openisl --version
 ```
+
+For development, use `cargo run -p openisl-cli` instead of installing.
 
 ## Quick Start
 
-### Prerequisites
-- Rust 1.70 or later
-- Git 2.0 or later
-
-### Installation
-
-From source:
 ```bash
-git clone https://github.com/bharat94/openISL.git
-cd openISL
-cargo build --release
-cargo install --path .
-```
-
-Or using cargo:
-```bash
-cargo install openisl
-```
-
-### Usage
-
-```bash
-# Navigate to a git repository
+# Navigate to a Git repository
 cd /path/to/your/project
 
-# View commit log (interactive TUI)
-openisl log
+# Explore history in the interactive TUI
+openisl tui
 
-# View commit log as ASCII in terminal
+# Or as text / an ASCII tree
+openisl log
 openisl log --simple
 
-# View commits from specific branch
+# Limit history
+openisl log -n 20
 openisl log --branch develop
 
-# View last 20 commits
-openisl log -n 20
+# Branches
+openisl branch            # list local branches
+openisl branch --all      # list local + remote
+openisl branch feat/x     # create a branch
 
-# List all branches
-openisl branch
-
-# List all branches including remotes
-openisl branch --all
-
-# Create a new branch
-openisl branch feature/new-feature
-
-# Checkout a branch or commit
+# Switch branches / commits
 openisl checkout develop
 
-# View repository status
+# Working tree
 openisl status
+openisl diff              # unstaged changes
+openisl diff --staged     # staged changes
+openisl diff abc1234      # changes introduced by a commit
 
-# View changes (diff)
-openisl diff
-
-# View staged changes
-openisl diff --staged
-
-# View changes for specific commit
-openisl diff --commit abc1234
-
-# Configure settings
-openisl config --show
-
-# Set theme
-openisl config --theme dark
-
-# Manage remotes
+# Remotes and tags
 openisl remote --list
-
-# Manage tags
-openisl tag --list
-openisl tag --create v1.0.0
+openisl tag               # list tags
+openisl tag v1.0.0        # create a tag
 ```
 
-### Interactive TUI
+## Interactive TUI
 
-Launch interactive smart log viewer:
+Run `openisl tui` in any repository. The most common keys:
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` or `↑` / `↓` | Move |
+| `Enter` | Commit details |
+| `Shift+D` | Diff view |
+| `i` | Hunk staging (on a file in Diff view) |
+| `Tab` / `Shift+Tab` | Switch panel |
+| `/` | Search |
+| `f` | Filter |
+| `s` | Statistics |
+| `Ctrl+P` | Command palette |
+| `?` | Help overlay |
+| `q` / `Esc` | Quit / go back |
+
+Press `?` inside the TUI for the complete, up-to-date keymap. View modes include **List**, **Details**, **Diff**, **Hunk staging**, **Statistics**, **Search**, **Filter**, **Stash**, and a **Command palette**.
+
+## Configuration
+
+openISL reads `~/.config/openisl/config.toml`. View or change it with:
+
 ```bash
-openisl log
+openisl config --show
+openisl config --theme dark
+openisl config --max-commits 500
 ```
 
-Keyboard shortcuts (in TUI):
-
-Navigation:
-- `j` / `k` or `↑` / `↓`: Navigate commits
-- `h` / `l` or `←` / `→`: Navigate panels (files, branches, commits)
-- `gg` / `Home`: Go to first commit
-- `G` / `End`: Go to last commit
-- `PageUp` / `PageDown`: Page through commits
-
-Panel Controls:
-- `Tab` / `Shift+Tab`: Switch between panels
-- `Ctrl+B`: Toggle sidebar
-- `Space`: Stage/unstage selected file
-
-Commit Operations:
-- `Enter`: View commit details
-- `c`: Create branch from commit
-- `b`: Create branch from commit
-- `d` / `Shift+D`: View diff of selected commit
-- `A`: Amend last commit
-- `D`: Drop selected commit
-- `S`: Squash selected commit into previous
-- `C`: Cherry-pick selected commit
-- `R`: Revert selected commit
-
-File Operations:
-- `Ctrl+S`: Stage all files
-- `Ctrl+U`: Unstage all files
-
-Search & Filter:
-- `/`: Search commits (by message, author, hash)
-- `Ctrl+N` / `Ctrl+P`: Navigate search results
-- `f`: Filter commits (by author, message, date)
-
-UI Controls:
-- `t`: Toggle theme (dark/light/monokai/nord)
-- `m`: Toggle mouse mode
-- `s`: View repository statistics
-- `?`: Show help
-- `Ctrl+P`: Command palette
-- `q` / `Esc`: Quit / go back
-
-View Modes:
-- List view: Commits with tree visualization
-- Details view: Full commit information
-- Diff view: Syntax-highlighted diff changes
-- Help overlay: Full keyboard shortcuts
-- Statistics view: Commits by author, activity timeline
+See the [Configuration reference](docs/cli-commands/config.md) for all fields and environment variable overrides.
 
 ## Documentation
 
-Our documentation follows the [Diátaxis Framework](https://diataxis.fr/) for clear, user-centric content:
+- [CLI Commands](docs/cli-commands/) — full reference for every command
+- [TUI Reference](docs/tui-reference/tui.md) — layout, keymap, themes
+- [Architecture](ARCHITECTURE.md) — design and component overview
+- [Changelog](CHANGELOG.md) — release history
+- [Contributing](CONTRIBUTING.md) — how to get involved
 
-### Tutorials
-- [Getting Started](docs/tutorials/getting-started.md) - Your first steps with openISL
-- [Understanding Smart Log](docs/tutorials/understanding-smartlog.md) - How to read the commit tree
-- [Git Operations](docs/tutorials/git-operations.md) - Common workflows
+## Project Structure
 
-### How-to Guides
-- [Installing openISL](docs/how-to-guides/installation.md) - Installation methods
-- [Configuring openISL](docs/how-to-guides/configuration.md) - Customize behavior
-- [Integration with CI/CD](docs/how-to-guides/ci-integration.md) - Use in pipelines
+```
+openISL/
+├── cli/        # Command-line interface (openisl binary)
+├── tui/        # Terminal user interface (ratatui)
+├── git/        # Git abstraction layer
+├── docs/       # Documentation
+└── Cargo.toml  # Workspace configuration
+```
 
-### Reference
-- [CLI Commands](docs/cli-commands/) - Complete command reference
-- [TUI Reference](docs/tui-reference/) - Terminal UI components
-- [Configuration](docs/reference/configuration.md) - All configuration options
+## Contributing
 
-### Explanation
-- [Architecture Overview](docs/explanation/architecture.md) - System design
-- [Smart Log Algorithm](docs/explanation/smartlog-algorithm.md) - How commit tree works
-- [Git Abstraction Layer](docs/explanation/git-abstraction.md) - Command mapping
-
-## Contribution
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Reporting Issues
-- Use our [issue templates](templates/issue-templates/)
-- Follow our [code of conduct](CODE_OF_CONDUCT.md)
-- Check existing issues first
-
-### Development Workflow
-1. Fork the repository
-2. Create a feature branch (`openisl branch feature/my-feature`)
-3. Follow [CONTRIBUTING.md](CONTRIBUTING.md) guidelines
-4. Submit a pull request using our [PR template](templates/pr-templates/)
+We welcome contributions! Start with [CONTRIBUTING.md](CONTRIBUTING.md), use the [issue templates](templates/issue-templates/), and follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Project Standards
 
-openISL follows industry best practices for open source projects:
-
-- **Documentation**: [Diátaxis Framework](https://diataxis.fr/)
 - **Commits**: [Conventional Commits](https://www.conventionalcommits.org/)
-- **Versioning**: [Semantic Versioning](https://semver.org/)
 - **Changelog**: [Keep a Changelog](https://keepachangelog.com/)
-- **Security**: [OpenSSF Security Baseline](https://baseline.openssf.org/)
-- **Governance**: [Open Governance Model](GOVERNANCE.md)
+- **Versioning**: [Semantic Versioning](https://semver.org/)
+- **Security**: [Security Policy](SECURITY.md)
+- **Governance**: [Governance Model](GOVERNANCE.md)
 
 See [Open Source Standards](OPEN_SOURCE_STANDARDS.md) for complete details.
 
-## Roadmap
-
-### v0.1.0 (Released!)
-- [x] Workspace structure setup
-- [x] Git abstraction layer (CLI wrapper)
-- [x] Core CLI commands (log, branch, checkout, status, diff)
-- [x] ASCII smart log visualization
-- [x] Unit tests and documentation
-- **Released**: 2026-01-10
-
-### v0.2.0 (Released!)
-- [x] Interactive TUI with commit tree
-- [x] Keyboard navigation
-- [x] TUI documentation
-- [x] Dark/Light theme presets with toggle
-- [x] TUI unit tests (10 tests)
-- **Released**: 2026-01-10
-
-### v0.3.0 (Released!)
-- [x] Interactive commit details view
-- [x] Help overlay with keyboard shortcuts
-- [x] ViewMode enum (List, Details, Diff, Help)
-- [x] View transitions (Enter, Esc, Shift+D)
-- [x] Interactive checkout from TUI (display only)
-- [x] Interactive branch creation from TUI (display only)
-- [x] Diff viewer with actual diff content
-- **Released**: 2026-01-10
-
-### v0.4.0 (Released!)
-- [x] Configuration file support (config.toml in ~/.config/openisl/)
-- [x] Branch filtering options (--remote, --all flags)
-- [x] Enhanced graph visualization (●○│ characters, main branch marker)
-- [x] Keyboard customization (keybindings.toml)
-- **Released**: 2026-01-10
-
-### v0.5.0 (Released!)
-- [x] Stash support (list, push, pop, apply, drop, show)
-- [x] Commit search functionality in TUI
-- [x] Ctrl+N/P for search result navigation
-- [x] Search by message, author, hash, summary
-- **Released**: 2026-01-11
-
-### v0.6.0 (Released!)
-- [x] Enhanced commit graph visualization with commit type symbols
-- [x] Commit type detection (Initial, Merge, Tag, Revert, Squash, Branch, Regular)
-- [x] Branch point indicators (┬) for multi-child commits
-- [x] Lane color assignment (8 distinct colors)
-- [x] Tag display in commit details
-- [x] Syntax highlighting for code diffs (30+ languages)
-- [x] Language auto-detection from file extension
-- [x] Theme-aware syntax colors (dark/light)
-- **Released**: 2026-01-11
-
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the [MIT License](LICENSE).
 
 ## Acknowledgments
 
-- [CLI Guidelines](https://clig.dev/) - CLI design principles
-- [Better CLI](https://bettercli.org/) - Interface design patterns
-- [Open Source Guides](https://opensource.guide/) - Community practices
-- [Diátaxis Framework](https://diataxis.fr/) - Documentation structure
-
-## Contact
-
-- **Website**: https://github.com/bharat94/openISL
-- **Issues**: https://github.com/bharat94/openISL/issues
-- **Discussions**: https://github.com/bharat94/openISL/discussions
-
----
-
-**openISL** - Your intelligent companion for git visualization and workflow enhancement. It doesn't just simplify git - it provides advanced visualization, syntax-highlighted diffs, and an efficient keyboard-driven interface that adapts to how you work.
+- [ratatui](https://github.com/ratatui-org/ratatui) — TUI framework
+- [crossterm](https://github.com/crossterm-rs/crossterm) — terminal handling
+- [clap](https://github.com/clap-rs/clap) — command-line parsing
+- [CLI Guidelines](https://clig.dev/) — CLI design principles

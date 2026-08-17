@@ -35,30 +35,29 @@ We adopt the [Diátaxis Framework](https://diataxis.fr/) for structuring our doc
 - **Purpose**: Step-by-step learning paths from zero to working knowledge
 - **Audience**: New users learning the tool
 - **Examples**:
-  - [Getting Started Guide](docs/tutorials/getting-started.md)
-  - [First Stack Analysis](docs/tutorials/first-analysis.md)
+  - [README Quick Start](../README.md#quick-start)
+  - [Interactive TUI](../README.md#interactive-tui)
 
 #### 2. How-to Guides
 - **Purpose**: Task-focused instructions for specific goals
 - **Audience**: Users who want to accomplish specific tasks
 - **Examples**:
-  - [Configuring Stack Detection](docs/how-to-guides/configuring-detection.md)
-  - [Setting up CI Integration](docs/how-to-guides/ci-integration.md)
+  - [Working with branches](../docs/cli-commands/branch.md)
+  - [Configuring openISL](../docs/cli-commands/config.md)
 
 #### 3. Reference
 - **Purpose**: Complete, authoritative information
 - **Audience**: Experienced users who need quick lookup
 - **Examples**:
-  - [CLI Command Reference](docs/cli-commands/)
-  - [Configuration Options](docs/reference/configuration.md)
-  - [TUI Component API](docs/tui-reference/)
+  - [CLI Command Reference](../docs/cli-commands/)
+  - [TUI Reference](../docs/tui-reference/tui.md)
 
 #### 4. Explanation
 - **Purpose**: Deep dives into concepts and context
 - **Audience**: Users wanting to understand "why" and "how it works"
 - **Examples**:
-  - [Architecture Overview](docs/explanation/architecture.md)
-  - [Stack Detection Algorithm](docs/explanation/detection-algorithm.md)
+  - [Architecture Overview](../ARCHITECTURE.md)
+  - [Hunk Staging](../ARCHITECTURE.md#hunk-staging)
 
 ### Technical Writing Standards
 
@@ -105,14 +104,14 @@ All commits follow [Conventional Commits 1.0.0](https://www.conventionalcommits.
 - `ci`: CI/CD changes
 
 #### Scopes
-Common scopes: `cli`, `tui`, `stack`, `git`, `docs`, `tests`
+Common scopes: `cli`, `tui`, `git`, `docs`, `tests`
 
 #### Breaking Changes
 Add `!` after type: `feat(api)!: remove deprecated endpoints`
 
 #### Examples
 ```bash
-git commit -m "feat(stack): add Python 3.12 support"
+git commit -m "feat(git): add stash apply"
 git commit -m "fix(cli): resolve branch detection in monorepos"
 git commit -m "docs(tui): update installation guide for Windows"
 git commit -m "feat(git)!: simplify save command interface"
@@ -239,8 +238,8 @@ Contributors can become maintainers based on:
 ### Recognition
 
 Contributors are recognized in:
-- [CONTRIBUTORS.md](CONTRIBUTORS.md) - List of all contributors
 - [CHANGELOG.md](CHANGELOG.md) - Credit in release notes
+- [GitHub Contributors](https://github.com/bharat94/openISL/graphs/contributors) - All-time contributors list
 - GitHub releases - Highlighted contributions
 - Annual contributor awards (planned)
 
@@ -381,7 +380,7 @@ Following [CLI Guidelines](https://clig.dev/) and [BetterCLI.org](https://better
 - **Efficient**: Fast, minimal output for common operations
 
 #### Command Design
-- **Verb-first naming**: `openisl stack`, `openisl branch`, `openisl save`
+- **Verb-first naming**: `openisl branch`, `openisl checkout`, `openisl log`
 - **Help system**: `--help` flag on all commands
 - **Verbose flag**: `--verbose` for detailed output
 - **Progress indication**: Show progress for long operations

@@ -1,8 +1,9 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use openisl_git::{
-    checkout, create_branch, create_tag, delete_tag, get_branches, get_commits, get_current_branch,
-    get_diff, get_status, remote_list, remote_remove, tag_list, SmartLogFormatter, StatusType,
+    checkout, create_branch, create_tag, delete_tag, get_branches, get_commits,
+    get_commits_filtered, get_current_branch, get_diff, get_status, remote_list, remote_remove,
+    tag_list, SmartLogFormatter, StatusType,
 };
 mod config;
 use config::Config;
@@ -27,7 +28,7 @@ enum Commands {
         branch: Option<String>,
         #[arg(long, help = "Include remote branches")]
         remote: bool,
-        #[arg(short, long, help = "Maximum number of commits to show")]
+        #[arg(short = 'n', long, help = "Maximum number of commits to show")]
         max_count: Option<usize>,
     },
 
@@ -154,13 +155,13 @@ fn main() -> Result<()> {
 
 fn cmd_log(
     simple: bool,
-    _branch: Option<&str>,
-    _remote: bool,
+    branch: Option<&str>,
+    remote: bool,
     max_count: Option<usize>,
 ) -> Result<()> {
     let repo_path = std::env::current_dir().context("Not in a directory")?;
 
-    let commits = get_commits(&repo_path, max_count)?;
+    let commits = get_commits_filtered(&repo_path, max_count, branch, remote)?;
 
     if simple {
         let formatter = SmartLogFormatter::new(commits, 80);
@@ -258,10 +259,10 @@ fn cmd_status() -> Result<()> {
     Ok(())
 }
 
-fn cmd_diff(_staged: bool, _commit: Option<&str>) -> Result<()> {
+fn cmd_diff(staged: bool, commit: Option<&str>) -> Result<()> {
     let repo_path = std::env::current_dir().context("Not in a directory")?;
 
-    let diff = get_diff(&repo_path, None, false)?;
+    let diff = get_diff(&repo_path, commit, staged)?;
 
     if diff.is_empty() {
         println!("No changes");

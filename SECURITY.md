@@ -117,20 +117,17 @@ We use [CVSS v3.1](https://www.first.org/cvss/calculator/3.1) for severity class
 
 ### SLSA Compliance
 
-openISL implements [SLSA Level 1](https://slsa.dev/) (Supply-chain Levels for Software Artifacts):
+openISL aims to follow [SLSA Level 1](https://slsa.dev/) (Supply-chain Levels for Software Artifacts):
 
 #### Build Verification
-- **Reproducible builds**: Same source → same binary
-- **Source provenance**: All artifacts traceable to source commit
-- **Signed artifacts**: Release binaries cryptographically signed
-- **Dependency verification**: Verify checksums of dependencies
+- **Source provenance**: All artifacts traceable to a source commit
+- **Dependency verification**: `Cargo.lock` committed and verified with `cargo`
 
 #### User Verification
 
 Users can verify:
-1. Downloaded file matches published checksum
-2. Binary signature is valid (when signing enabled)
-3. Source code in release matches repository state
+1. Source code in the release matches the repository state
+2. Build from source reproduces the expected behavior (`cargo build --release`)
 
 ### Dependency Policy
 
@@ -145,19 +142,17 @@ We follow these principles:
 ### Built-in Protections
 
 #### Git Operations Safety
-- Confirmation prompts for destructive operations (force push, branch deletion)
-- Dry-run mode for testing commands: `openisl save --dry-run`
-- Display of affected files before operations: `openisl commit --preview`
+- Mutating operations (`checkout`, `branch`, `tag`, stash apply/drop) are explicit commands — nothing runs without user action
+- The TUI's destructive commit operations (amend, drop, squash, revert) report their outcome via the status bar; no silent changes
+- Git itself provides the underlying safety guarantees (e.g. checkout refuses when uncommitted changes would be lost)
 
 #### File System Safety
-- Read-only mode for analysis: `openisl stack --read-only`
-- Path sanitization: Prevent directory traversal
-- File permission checks: Verify before modifications
+- Paths come from Git output (file status, diffs); they are rendered, not executed
+- No arbitrary command execution: all operations go through the `git` CLI wrapper
 
 #### Network Safety
 - No automatic outbound connections
-- Explicit user opt-in for network operations
-- Display network activity when active: `--verbose` shows network calls
+- Explicit user opt-in for network operations (e.g. `git fetch`)
 
 ## Security Monitoring
 

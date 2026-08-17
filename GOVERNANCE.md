@@ -40,7 +40,7 @@ openISL follows an **open governance model** inspired by [Open Source Initiative
 ### Module Maintainers
 
 **Responsibilities**:
-- Own specific modules (cli, tui, stack, git)
+- Own specific modules (cli, tui, git)
 - Review and merge PRs in their domain
 - Guide contributors in their area
 - Ensure code quality and standards adherence
@@ -111,8 +111,8 @@ For day-to-day decisions:
 ### Contribution Credit
 
 Contributors are credited in:
-- [CONTRIBUTORS.md](CONTRIBUTORS.md) - All-time contributors list
 - [CHANGELOG.md](CHANGELOG.md) - Release-specific credits
+- [GitHub Contributors](https://github.com/bharat94/openISL/graphs/contributors) - All-time contributors list
 - GitHub release notes - Highlighted contributions
 
 ### Types of Recognition

@@ -1,5 +1,10 @@
 # openISL TUI Wireframes and UI Specifications
 
+> **Note:** This document is a historical design artifact. The wireframes and sample
+> file paths (e.g. `src/stack/`) predate the current implementation and may not
+> reflect the actual TUI. See the [live TUI Reference](tui-reference/tui.md) for the
+> current layout, keymap, and behavior.
+
 This document contains detailed ASCII wireframes and UI specifications for all panels and flows in the openISL Terminal User Interface.
 
 ---

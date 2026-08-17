@@ -9,10 +9,10 @@ Thank you for your interest in contributing to openISL! We welcome contributions
 - [Development Setup](#development-setup)
 - [Project Structure](#project-structure)
 - [Making Changes](#making-changes)
-- [Submiting Changes](#submiting-changes)
 - [Style Guidelines](#style-guidelines)
 - [Testing](#testing)
 - [Documentation](#documentation)
+- [Getting Help](#getting-help)
 
 ## Code of Conduct
 
@@ -21,24 +21,22 @@ Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md) in all interact
 ## Getting Started
 
 ### Prerequisites
-- **Rust** (latest stable version) - Primary language
-- **Git** - For version control
-- **Cargo** - Rust package manager
 
-### Setting Up Development Environment
+- **Rust** (latest stable) via [rustup](https://rustup.rs/) — the project targets Rust 1.70+
+- **Git** (2.0+)
+
+### Setting Up the Development Environment
 
 ```bash
 # Clone your fork
 git clone https://github.com/your-username/openISL.git
 cd openISL
 
-# Add upstream remote
+# Add the upstream remote
 git remote add upstream https://github.com/bharat94/openISL.git
 
-# Install dependencies
+# Build and run tests to verify the setup
 cargo build
-
-# Run tests to verify setup
 cargo test
 ```
 
@@ -46,75 +44,71 @@ cargo test
 
 ```
 openISL/
-├── crates/
-│   ├── cli/              # Command-line interface
-│   ├── tui/              # Terminal user interface
-│   ├── stack/             # Stack detection and analysis
-│   └── git/              # Git abstraction layer
-├── docs/                   # Documentation
-├── templates/               # Issue and PR templates
-├── tests/                   # Integration and unit tests
-└── Cargo.toml             # Workspace configuration
+├── cli/          # Command-line interface (produces the `openisl` binary)
+├── tui/          # Terminal user interface (ratatui)
+├── git/          # Git abstraction layer
+├── docs/         # Documentation (CLI reference, TUI reference)
+├── templates/    # Issue templates
+├── .github/      # PR template and CI workflows
+└── Cargo.toml    # Workspace configuration
 ```
 
 ### Module Responsibilities
-- **cli/**: Command parsing, argument handling, command execution
-- **tui/**: Terminal UI components, interactive navigation, visualization
-- **stack/**: Technology detection algorithms, parser implementations
-- **git/**: Git operations abstraction, command mapping
+
+- **cli/**: Command parsing, configuration, command execution
+- **tui/**: Terminal UI components, interactive navigation, rendering, hunk staging
+- **git/**: Git operations abstraction, command mapping, output parsing
 
 ## Making Changes
 
 ### 1. Find an Issue or Create One
 
-Check our [issue tracker](https://github.com/bharat94/openISL/issues) for open issues. Use our [issue templates](templates/issue-templates/) for new issues.
+Check the [issue tracker](https://github.com/bharat94/openISL/issues) for open issues. Use the [issue templates](templates/issue-templates/) for new issues.
 
 ### 2. Create a Branch
 
-Use our unified git interface or conventional naming:
-
 ```bash
-# Using openISL
-openisl branch feature/descriptive-name
-
-# Or using git
 git checkout -b feature/descriptive-name
 ```
 
 Branch naming conventions:
-- `feature/description` - New features
-- `fix/description` - Bug fixes
-- `docs/description` - Documentation changes
-- `refactor/description` - Code refactoring
-- `test/description` - Test additions
+
+- `feature/description` — new features
+- `fix/description` — bug fixes
+- `docs/description` — documentation changes
+- `refactor/description` — code refactoring
+- `test/description` — test additions
 
 ### 3. Make Your Changes
 
 #### Code Standards
-- Follow [Rust style guidelines](https://rust-lang.github.io/api-guidelines/)
-- Use `cargo fmt` before committing
-- Pass `cargo clippy` checks
+
+- Follow [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/)
+- Run `cargo fmt` before committing
+- Pass `cargo clippy --all-targets -- -D warnings`
 - Write clear, self-documenting code
+- See [AGENTS.md](AGENTS.md) for the full style guide used by tooling
 
 #### Conventional Commits
 
-We use [Conventional Commits](https://www.conventionalcommits.org/) for structured commit messages:
+We use [Conventional Commits](https://www.conventionalcommits.org/) for commit messages:
 
 ```bash
 # Feature
-git commit -m "feat: add stack visualization for dependencies"
+git commit -m "feat(tui): add interactive blame viewer"
 
 # Bug fix
-git commit -m "fix: resolve branch detection issue in monorepos"
+git commit -m "fix(git): resolve branch detection in monorepos"
 
 # Documentation
-git commit -m "docs: update installation guide for Windows"
+git commit -m "docs: update installation guide"
 
 # Breaking change
 git commit -m "feat(cli)!: change command syntax to be more intuitive"
 ```
 
 Commit types:
+
 - `feat`: New feature
 - `fix`: Bug fix
 - `docs`: Documentation changes
@@ -125,13 +119,11 @@ Commit types:
 - `perf`: Performance improvements
 - `ci`: CI/CD changes
 
-Add scope in parentheses: `feat(stack)`, `fix(cli)`, `docs(git)`.
-
-Add `!` after type for breaking changes: `feat(api)!`.
+Add a scope in parentheses (`feat(git)`, `fix(cli)`, `docs(tui)`) and `!` for breaking changes (`feat(api)!`).
 
 ### 4. Write Tests
 
-We require tests for all new functionality:
+We require tests for new functionality:
 
 ```rust
 #[cfg(test)]
@@ -139,24 +131,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_stack_detection() {
-        // Test implementation
+    fn test_get_commits_returns_commits() {
+        let repo_path = std::env::current_dir().unwrap();
+        let result = get_commits(&repo_path, Some(5));
+        assert!(result.is_ok());
+        assert!(!result.unwrap().is_empty());
     }
 }
 ```
 
 Run tests before committing:
+
 ```bash
 cargo test
-cargo test --all-features
 ```
+
+The `git` crate has integration tests that create real temporary repositories (with `tempfile`) and run actual Git operations; these run as part of the normal `cargo test`.
 
 ### 5. Update Documentation
 
-- Update relevant documentation in `docs/`
+- Update the relevant docs in `docs/` (CLI commands, TUI reference, or `ARCHITECTURE.md`)
 - Add examples for new features
-- Update [CHANGELOG.md](CHANGELOG.md) if user-facing
-- Update API reference if applicable
+- Update [CHANGELOG.md](CHANGELOG.md) under `[Unreleased]` if the change is user-facing
 
 ### 6. Submit Your Changes
 
@@ -168,16 +164,12 @@ git rebase upstream/main
 # Push to your fork
 git push origin feature/descriptive-name
 
-# Create pull request
-openisl pr
+# Create a pull request
+gh pr create
 # Or visit: https://github.com/bharat94/openISL/compare
 ```
 
-## Submiting Changes
-
-### Pull Request Guidelines
-
-Use our [PR template](templates/pr-templates/pr-template.md) for new pull requests.
+Use our [PR template](.github/PULL_REQUEST_TEMPLATE/pr-template.md) for new pull requests.
 
 ### PR Checklist
 
@@ -185,104 +177,79 @@ Before submitting, ensure:
 
 - [ ] Code follows project style guidelines
 - [ ] All tests pass (`cargo test`)
-- [ ] No clippy warnings (`cargo clippy`)
+- [ ] No clippy warnings (`cargo clippy --all-targets -- -D warnings`)
+- [ ] Formatting is clean (`cargo fmt --check`)
 - [ ] Documentation is updated
-- [ ] CHANGELOG.md is updated (if user-facing)
+- [ ] CHANGELOG.md is updated under `[Unreleased]` (if user-facing)
 - [ ] Commit messages follow Conventional Commits
-- [ ] PR description references linked issue
+- [ ] PR description references the linked issue
 - [ ] Breaking changes are clearly documented
 
 ### PR Review Process
 
-Maintainers will review your PR within 5 business days. Expect feedback on:
-
-- Code quality and style
-- Test coverage
-- Documentation completeness
-- Architecture and design decisions
-
-Respond to feedback promptly. If significant changes are requested, make them in the same branch.
+Maintainers will review your PR. Expect feedback on code quality and style, test coverage, documentation completeness, and design decisions. Respond to feedback promptly; if significant changes are requested, make them in the same branch.
 
 ## Style Guidelines
 
 ### Rust Code
+
 - Use `cargo fmt` for consistent formatting
-- Address `cargo clippy` warnings
+- Address all `cargo clippy` warnings
 - Prefer idiomatic Rust patterns
 - Document public APIs with `///` comments
-- Use `unwrap_or_default()` carefully - handle errors appropriately
+- Handle errors with `anyhow::Context`/`?` instead of `unwrap()`/`expect()`
 
 ### Documentation
+
 - Write clear, concise explanations
 - Include code examples
-- Follow [Diátaxis Framework](https://diataxis.fr/) (tutorials, how-to, reference, explanation)
+- Explain "why", not just "what"
+- Follow the existing doc structure in `docs/`
 - Use inclusive language
 
 ### TUI Components
-- Follow accessibility guidelines (keyboard navigation, screen reader support)
-- Provide helpful error messages
+
+- Keep everything keyboard-navigable
+- Provide helpful status/error messages
 - Show progress for long operations
-- Use consistent color schemes
+- Use the theme system consistently
 
 ## Testing
 
 ### Test Coverage
 
-We aim for high test coverage. Run:
-```bash
-# Generate coverage report
-cargo tarpaulin --out Html
+We aim for high test coverage. To generate a report:
 
-# Check coverage
+```bash
+cargo tarpaulin --out Html
 open tarpaulin-report.html
 ```
 
 ### Integration Tests
 
-For integration tests:
-```bash
-# Run integration tests
-cargo test --test integration
-
-# Test with real git repositories
-cargo test --test integration --features git-tests
-```
+The `git` crate's integration tests (`git/tests/`) use real temporary repositories created with `tempfile`. They run as part of `cargo test` and require a working `git` binary.
 
 ## Documentation
 
-### Writing Docs
+The docs follow a practical layout:
 
-Follow [Google Technical Writing](https://developers.google.com/tech-writing/) guidelines:
-- Write for your audience
-- Use clear, simple language
-- Provide concrete examples
-- Explain "why", not just "what"
-
-### Doc Types
-
-- **Tutorials**: Step-by-step learning paths
-- **How-to guides**: Task-focused instructions
-- **Reference**: Complete command/API documentation
-- **Explanation**: Deep dives into concepts
+- `README.md` — landing page, quick start, TUI overview
+- `docs/cli-commands/` — per-command reference
+- `docs/tui-reference/` — TUI layout, keymap, themes
+- `ARCHITECTURE.md` — design and component overview
 
 ## Getting Help
 
-- **Questions**: Ask in [Discussions](https://github.com/bharat94/openISL/discussions)
-- **Bug Reports**: Use [issue templates](templates/issue-templates/bug.md)
-- **Feature Requests**: Use [issue templates](templates/issue-templates/feature.md)
+- **Questions**: ask in [Discussions](https://github.com/bharat94/openISL/discussions)
+- **Bug Reports**: use the [bug report template](templates/issue-templates/bug.md)
+- **Feature Requests**: use the [feature request template](templates/issue-templates/feature.md)
 
-## Recognition
-
-Contributors are recognized in:
-- [CONTRIBUTORS.md](CONTRIBUTORS.md) - List of contributors
-- [CHANGELOG.md](CHANGELOG.md) - Credit in release notes
-- GitHub release notes - Highlighted contributions
-
-Thank you for contributing to openISL! 🚀
+Thank you for contributing to openISL!
 
 ---
 
 See also:
+
 - [Code of Conduct](CODE_OF_CONDUCT.md)
 - [Open Source Standards](OPEN_SOURCE_STANDARDS.md)
 - [Governance Model](GOVERNANCE.md)
