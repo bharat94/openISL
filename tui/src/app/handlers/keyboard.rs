@@ -6,6 +6,13 @@ use super::super::*;
 
 impl App {
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> bool {
+        if key.code == KeyCode::Char('?')
+            && self.view_mode != ViewMode::CommandPalette
+            && self.view_mode != ViewMode::Help
+        {
+            self.view_mode = ViewMode::Help;
+            return false;
+        }
         match self.view_mode {
             ViewMode::List => self.handle_list_key(key),
             ViewMode::Details => self.handle_details_key(key),

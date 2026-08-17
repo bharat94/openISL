@@ -1076,6 +1076,48 @@ mod tests {
     }
 
     #[test]
+    fn test_help_reachable_from_all_views() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        for mode in [
+            ViewMode::List,
+            ViewMode::Details,
+            ViewMode::Diff,
+            ViewMode::Stats,
+            ViewMode::HunkStaging,
+            ViewMode::Search,
+            ViewMode::Filter,
+            ViewMode::InputBranch,
+            ViewMode::BranchSearch,
+            ViewMode::Stash,
+        ] {
+            app.view_mode = mode;
+            app.handle_key(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
+            assert_eq!(
+                app.view_mode,
+                ViewMode::Help,
+                "help not reachable from view {:?}",
+                mode
+            );
+            app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+            assert_eq!(app.view_mode, ViewMode::List);
+        }
+    }
+
+    #[test]
+    fn test_question_mark_typed_in_command_palette() {
+        let commits = create_test_commits();
+        let mut app = App::new(commits, "main".to_string(), None);
+
+        app.open_command_palette();
+        app.handle_key(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
+
+        assert_eq!(app.view_mode, ViewMode::CommandPalette);
+        assert!(app.command_palette_input.contains('?'));
+    }
+
+    #[test]
     fn test_branch_input_mode() {
         let commits = create_test_commits();
         let mut app = App::new(commits, "main".to_string(), None);

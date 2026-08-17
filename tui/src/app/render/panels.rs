@@ -256,43 +256,54 @@ pub(crate) fn render_help_overlay(app: &App, frame: &mut ratatui::Frame) {
         .alignment(Alignment::Center);
     title.render(chunks[0], frame.buffer_mut());
 
-    let help_content = format!(
-        r#"Navigation:
-  {}         Move up
-  {}         Move down
-  {}         Jump page up
-  {}         Jump page down
-  {}         Go to first
-  {}         Go to last
+    let help_content = r#"Navigation:
+  j/k or ↑/↓    Move up/down
+  PgUp/PgDn      Jump page up/down
+  Home/End       Go to first/last
+
+Panels:
+  Tab / Shift+Tab  Switch panel
+  ← / →            Switch panel (sidebar visible)
+  Ctrl+B           Toggle sidebar
+  Space            Toggle file staged (Files panel)
+
+Views:
+  Enter        Commit details
+  Shift+D      View diff
+  i            Hunk staging (Diff view, file selected)
+  s            Commit stats
+  /            Search commits (Branches panel: search branches)
+  f            Filter by author/message/date
+  Ctrl+P       Command palette
+  ?            This help
 
 Actions:
-  {}         View commit details
-  {}         Checkout selected commit
-  {}         Create branch from commit
-  {}         View diff
-  {}         Toggle dark/light theme
-  /           Search commits
-  Ctrl+N/P    Next/prev search result
+  c            Checkout selected commit
+  b            Create branch from commit
+  A            Amend commit
+  D            Drop commit
+  S            Squash commits
+  C            Cherry-pick commit
+  R            Revert commit
+  r            Re-apply filter
+  Ctrl+N/P     Next/prev search result
+  Ctrl+U       Unstage all files
+  m            Toggle mouse support
+  t            Cycle theme
+
+Hunk staging (i in Diff view):
+  j/k or ↑/↓   Move line/hunk
+  Space        Toggle line selection
+  s / u        Stage / unstage selected
+  Esc          Exit
+
+Stash view:
+  a / d / p    Apply / drop / pop stash
+  Enter        View stash diff
 
 Other:
-  {}         Show this help
-  {}         Quit or go back
-
-Customize: Edit ~/.config/openisl/keybindings.toml"#,
-        app.keybindings.navigation.up,
-        app.keybindings.navigation.down,
-        app.keybindings.navigation.page_up,
-        app.keybindings.navigation.page_down,
-        app.keybindings.navigation.go_to_start,
-        app.keybindings.navigation.go_to_end,
-        app.keybindings.actions.view_details,
-        app.keybindings.actions.checkout,
-        app.keybindings.actions.create_branch,
-        app.keybindings.actions.view_diff,
-        app.keybindings.actions.toggle_theme,
-        app.keybindings.actions.help,
-        app.keybindings.actions.quit,
-    );
+  ?            Show this help
+  q / Esc      Quit or go back"#;
 
     let help_widget = Paragraph::new(help_content)
         .style(Style::default().fg(app.theme.text))
@@ -306,11 +317,7 @@ Customize: Edit ~/.config/openisl/keybindings.toml"#,
         );
     help_widget.render(chunks[1], frame.buffer_mut());
 
-    let help_text = format!(
-        "Press {} to close | Theme: {}",
-        app.keybindings.actions.help,
-        app.theme.name()
-    );
+    let help_text = format!("Press ? to close | Theme: {}", app.theme.name());
     let help_widget = Paragraph::new(help_text)
         .style(Style::default().fg(app.theme.help))
         .alignment(Alignment::Center);
