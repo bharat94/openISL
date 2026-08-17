@@ -4,6 +4,13 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
+/// Create a commit from the currently staged changes.
+pub fn commit(repo_path: &Path, message: &str) -> Result<()> {
+    run_success(&["commit", "-m", message], Some(repo_path))
+        .with_context(|| "Failed to create commit")?;
+    Ok(())
+}
+
 pub fn amend_commit(repo_path: &Path, amend_message: Option<&str>) -> Result<()> {
     if let Some(msg) = amend_message {
         run_success(&["commit", "--amend", "-m", msg], Some(repo_path))

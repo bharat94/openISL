@@ -118,6 +118,29 @@ pub fn stage_file(repo_path: &Path, file: &str) -> Result<()> {
     Ok(())
 }
 
+/// Stage the given list of paths (also stages new and removed files).
+pub fn add_paths(repo_path: &Path, paths: &[&str]) -> Result<()> {
+    let mut args = vec!["add"];
+    args.extend_from_slice(paths);
+
+    run(&args, Some(repo_path)).with_context(|| "Failed to add paths")?;
+    Ok(())
+}
+
+/// Remove a tracked file from the working tree and the index (`git rm`).
+pub fn remove_file(repo_path: &Path, file: &str) -> Result<()> {
+    run(&["rm", file], Some(repo_path))
+        .with_context(|| format!("Failed to remove file: {}", file))?;
+    Ok(())
+}
+
+/// Move (rename) a tracked file (`git mv`).
+pub fn move_file(repo_path: &Path, from: &str, to: &str) -> Result<()> {
+    run(&["mv", from, to], Some(repo_path))
+        .with_context(|| format!("Failed to move '{}' to '{}'", from, to))?;
+    Ok(())
+}
+
 pub fn stage_all(repo_path: &Path) -> Result<()> {
     run(&["add", "-A"], Some(repo_path)).with_context(|| "Failed to stage all files")?;
     Ok(())

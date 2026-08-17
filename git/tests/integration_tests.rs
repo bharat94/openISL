@@ -1,6 +1,7 @@
 use openisl_git::{
-    get_branches, get_commits, get_commits_filtered, get_current_branch, get_status, Commit,
-    FileStatus, GitRef, RefType, StatusType,
+    add_paths, commit, get_blame, get_branches, get_commits, get_commits_filtered,
+    get_current_branch, get_stash_list, get_status, init, merge, move_file, remove_file, reset,
+    stash_pop, stash_push, Commit, FileStatus, GitRef, RefType, ResetMode, StatusType,
 };
 
 use std::process::Command;
@@ -444,5 +445,109 @@ mod serialization_tests {
         let feature = get_commits_filtered(repo, None, Some("feature/x"), false).unwrap();
         assert_eq!(feature.len(), 2);
         assert_eq!(feature[0].summary, "feature work");
+    }
+
+    #[test]
+    fn test_commit_and_reset() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        git(repo, &["init", "-q"]);
+        git(repo, &["config", "user.email", "test@example.com"]);
+        git(repo, &["config", "user.name", "Test"]);
+        init(repo).unwrap();
+        std::fs::write(repo.join("a.txt"), "one").unwrap();
+        add_paths(repo, &["a.txt"]).unwrap();
+        commit(repo, "first").unwrap();
+        std::fs::write(repo.join("a.txt"), "two").unwrap();
+        add_paths(repo, &["a.txt"]).unwrap();
+        commit(repo, "second").unwrap();
+
+        assert_eq!(get_commits(repo, None).unwrap().len(), 2);
+
+        reset(repo, ResetMode::Hard, Some("HEAD~1")).unwrap();
+        assert_eq!(get_commits(repo, None).unwrap().len(), 1);
+        assert_eq!(std::fs::read_to_string(repo.join("a.txt")).unwrap(), "one");
+    }
+
+    #[test]
+    fn test_stash_push_pop() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        git(repo, &["init", "-q"]);
+        git(repo, &["config", "user.email", "test@example.com"]);
+        git(repo, &["config", "user.name", "Test"]);
+        std::fs::write(repo.join("a.txt"), "base").unwrap();
+        add_paths(repo, &["a.txt"]).unwrap();
+        commit(repo, "base").unwrap();
+
+        std::fs::write(repo.join("a.txt"), "modified").unwrap();
+        stash_push(repo, Some("wip")).unwrap();
+        assert_eq!(get_stash_list(repo).unwrap().len(), 1);
+        assert_eq!(std::fs::read_to_string(repo.join("a.txt")).unwrap(), "base");
+
+        stash_pop(repo, None).unwrap();
+        assert!(get_stash_list(repo).unwrap().is_empty());
+        assert_eq!(
+            std::fs::read_to_string(repo.join("a.txt")).unwrap(),
+            "modified"
+        );
+    }
+
+    #[test]
+    fn test_move_and_remove_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        git(repo, &["init", "-q"]);
+        git(repo, &["config", "user.email", "test@example.com"]);
+        git(repo, &["config", "user.name", "Test"]);
+        std::fs::write(repo.join("a.txt"), "x").unwrap();
+        std::fs::write(repo.join("b.txt"), "y").unwrap();
+        add_paths(repo, &["a.txt", "b.txt"]).unwrap();
+        commit(repo, "base").unwrap();
+
+        move_file(repo, "a.txt", "c.txt").unwrap();
+        remove_file(repo, "b.txt").unwrap();
+        commit(repo, "rename").unwrap();
+
+        assert!(repo.join("c.txt").exists());
+        assert!(!repo.join("a.txt").exists());
+        assert!(!repo.join("b.txt").exists());
+    }
+
+    #[test]
+    fn test_merge_branches() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        git(repo, &["init", "-q"]);
+        git(repo, &["config", "user.email", "test@example.com"]);
+        git(repo, &["config", "user.name", "Test"]);
+        std::fs::write(repo.join("a.txt"), "base\n").unwrap();
+        add_paths(repo, &["a.txt"]).unwrap();
+        commit(repo, "base").unwrap();
+
+        git(repo, &["checkout", "-q", "-b", "feature"]);
+        std::fs::write(repo.join("b.txt"), "feature\n").unwrap();
+        add_paths(repo, &["b.txt"]).unwrap();
+        commit(repo, "feature work").unwrap();
+
+        git(repo, &["checkout", "-q", "main"]);
+        merge(repo, "feature", true).unwrap();
+        assert!(repo.join("b.txt").exists());
+    }
+
+    #[test]
+    fn test_blame() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path();
+        git(repo, &["init", "-q"]);
+        git(repo, &["config", "user.email", "test@example.com"]);
+        git(repo, &["config", "user.name", "Test"]);
+        std::fs::write(repo.join("a.txt"), "line one\n").unwrap();
+        add_paths(repo, &["a.txt"]).unwrap();
+        commit(repo, "initial").unwrap();
+
+        let blame = get_blame(repo, "a.txt").unwrap();
+        assert!(blame.contains("line one"));
+        assert!(blame.contains("Test"));
     }
 }

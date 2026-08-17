@@ -6,12 +6,29 @@ Complete reference for all `openisl` command-line commands. openISL is a Git wra
 
 | Command | Description | Maps to |
 |---------|-------------|---------|
+| [`openisl init`](init.md) | Initialize a new repository | `git init` |
+| [`openisl clone`](clone.md) | Clone a remote repository | `git clone` |
 | [`openisl log`](log.md) | Show commit history (text or ASCII tree) | `git log` |
 | [`openisl tui`](tui.md) | Launch the interactive terminal UI | — |
-| [`openisl branch`](branch.md) | List or create branches | `git branch`, `git checkout -b` |
+| [`openisl branch`](branch.md) | List, create, or delete branches | `git branch`, `git checkout -b` |
 | [`openisl checkout`](checkout.md) | Switch to a branch or commit | `git checkout` |
 | [`openisl status`](status.md) | Show working tree status | `git status` |
 | [`openisl diff`](diff.md) | Show changes (working tree, staged, or a commit) | `git diff` |
+| [`openisl add`](add.md) | Stage files (add to the index) | `git add` |
+| [`openisl rm`](rm.md) | Remove a tracked file | `git rm` |
+| [`openisl mv`](mv.md) | Move (rename) a tracked file | `git mv` |
+| [`openisl commit`](commit.md) | Create a commit from staged changes | `git commit` |
+| [`openisl show`](show.md) | Show a commit and its changes | `git show` |
+| [`openisl blame`](blame.md) | Annotate a file line by line | `git blame` |
+| [`openisl merge`](merge.md) | Merge a branch into the current branch | `git merge` |
+| [`openisl rebase`](rebase.md) | Rebase the current branch | `git rebase` |
+| [`openisl reset`](reset.md) | Move HEAD to a revision | `git reset` |
+| [`openisl cherry-pick`](cherry-pick.md) | Cherry-pick a commit | `git cherry-pick` |
+| [`openisl revert`](revert.md) | Revert a commit | `git revert` |
+| [`openisl stash`](stash.md) | Manage stashed changes | `git stash` |
+| [`openisl fetch`](fetch.md) | Fetch from a remote | `git fetch` |
+| [`openisl pull`](pull.md) | Fetch and merge remote changes | `git pull` |
+| [`openisl push`](push.md) | Push commits to a remote | `git push` |
 | [`openisl config`](config.md) | View and update settings | — |
 | [`openisl remote`](remote.md) | List, add, or remove remotes | `git remote` |
 | [`openisl tag`](tag.md) | List, create, or delete tags | `git tag` |

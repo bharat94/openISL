@@ -29,6 +29,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Git diff filtering**: `get_commits_filtered` supports `--branch` and
   `--remote` scoping in `openisl log`
 - **CI workflow**: `fmt`, `clippy -D warnings`, and `test` on GitHub Actions
+- **Core Git commands in the CLI**: `init`, `clone`, `add`, `rm`, `mv`,
+  `commit` (with `--amend`), `show`, `blame`, `merge`, `rebase` (with `-i`),
+  `reset` (`--soft`/`--hard`), `cherry-pick`, `revert`, `stash`
+  (`push`/`list`/`pop`/`apply`/`drop`), `fetch`, `pull` (`--rebase`), and
+  `push` (`--tags`, `--set-upstream`) — previously missing or stubbed
+- **`openisl remote` can add remotes**: `openisl remote <name> <url>`
+  (previously printed a placeholder message); list output no longer mangles
+  fetch/push types
+- **VCS compatibility matrix**: `docs/vcs/compatibility-matrix.md` maps git,
+  Mercurial, Subversion, Fossil, Darcs, Pijul, and Jujutsu functionality to
+  openISL commands, with a coverage table and tiered gap analysis
 
 ### Changed
 - **Refactored the TUI**: the monolithic `app.rs` (4400+ lines) was split into
@@ -55,6 +66,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Rewrote `README.md`: removed duplicated sections, dead links, and inaccurate
   commands; aligned the TUI keymap, installation, and CLI examples with reality
 - Added CLI reference pages for `tui`, `config`, `remote`, and `tag`
+- Added CLI reference pages for `init`, `clone`, `add`, `rm`, `mv`, `commit`,
+  `show`, `blame`, `merge`, `rebase`, `reset`, `cherry-pick`, `revert`,
+  `stash`, `fetch`, `pull`, and `push`; updated the CLI index to list every
+  command
 - Updated the CLI reference (`log`, `branch`, `checkout`, `status`, `diff`),
   the TUI reference, `ARCHITECTURE.md`, `AGENTS.md`, and `CONTRIBUTING.md` to
   match the current code (removed references to the non-existent `stack` crate

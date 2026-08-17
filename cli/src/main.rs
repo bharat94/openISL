@@ -1,9 +1,12 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use openisl_git::{
-    checkout, create_branch, create_tag, delete_tag, get_branches, get_commits,
-    get_commits_filtered, get_current_branch, get_diff, get_status, remote_list, remote_remove,
-    tag_list, SmartLogFormatter, StatusType,
+    add_paths, amend_commit, checkout, cherry_pick_commit, clone, commit, create_branch,
+    create_tag, delete_tag, fetch, get_blame, get_branches, get_commit_diff, get_commits,
+    get_commits_filtered, get_current_branch, get_diff, get_stash_list, get_status, init, merge,
+    move_file, pull, push, rebase, remote_add, remote_list, remote_remove, remove_file, reset,
+    revert_commit, stage_all, stash_apply, stash_drop, stash_pop, stash_push, tag_list, ResetMode,
+    SmartLogFormatter, StatusType,
 };
 mod config;
 use config::Config;
@@ -35,6 +38,17 @@ enum Commands {
     #[command(about = "Launch interactive TUI for commit history")]
     Tui,
 
+    #[command(about = "Initialize a new repository")]
+    Init,
+
+    #[command(about = "Clone a remote repository")]
+    Clone {
+        #[arg(help = "Remote repository URL or path")]
+        url: String,
+        #[arg(help = "Destination directory (defaults to repo name)")]
+        destination: Option<String>,
+    },
+
     #[command(about = "List, create, or delete branches")]
     Branch {
         #[arg(help = "Create a new branch with this name")]
@@ -51,6 +65,42 @@ enum Commands {
         target: String,
     },
 
+    #[command(about = "Stage files (add to the index)")]
+    Add {
+        #[arg(help = "Paths to stage")]
+        paths: Vec<String>,
+        #[arg(short = 'A', long, help = "Stage all changes (new, modified, deleted)")]
+        all: bool,
+    },
+
+    #[command(about = "Remove a tracked file")]
+    Rm {
+        #[arg(help = "Path to remove")]
+        path: String,
+    },
+
+    #[command(about = "Move (rename) a tracked file")]
+    Mv {
+        #[arg(help = "Source path")]
+        from: String,
+        #[arg(help = "Destination path")]
+        to: String,
+    },
+
+    #[command(about = "Create a commit from staged changes")]
+    Commit {
+        #[arg(short = 'm', long, help = "Commit message")]
+        message: Option<String>,
+        #[arg(long, help = "Amend the last commit instead")]
+        amend: bool,
+    },
+
+    #[command(about = "Show a commit and its changes")]
+    Show {
+        #[arg(help = "Commit hash or revision to show")]
+        commit: String,
+    },
+
     #[command(about = "Show working tree status")]
     Status,
 
@@ -60,6 +110,80 @@ enum Commands {
         staged: bool,
         #[arg(help = "Show changes for specific commit")]
         commit: Option<String>,
+    },
+
+    #[command(about = "Merge a branch or commit into the current branch")]
+    Merge {
+        #[arg(help = "Branch or commit to merge")]
+        target: String,
+    },
+
+    #[command(about = "Rebase the current branch onto an upstream")]
+    Rebase {
+        #[arg(help = "Upstream branch or revision")]
+        upstream: Option<String>,
+        #[arg(short = 'i', long, help = "Interactive rebase")]
+        interactive: bool,
+    },
+
+    #[command(about = "Reset the current branch to a revision")]
+    Reset {
+        #[arg(long, help = "Move HEAD, index, and working tree (discard changes)")]
+        hard: bool,
+        #[arg(long, help = "Move HEAD only, keep changes")]
+        soft: bool,
+        #[arg(help = "Revision to reset to (defaults to HEAD)")]
+        target: Option<String>,
+    },
+
+    #[command(about = "Cherry-pick a commit onto the current branch")]
+    CherryPick {
+        #[arg(help = "Commit to cherry-pick")]
+        commit: String,
+    },
+
+    #[command(about = "Revert a commit")]
+    Revert {
+        #[arg(help = "Commit to revert")]
+        commit: String,
+    },
+
+    #[command(about = "Stash uncommitted changes")]
+    Stash {
+        #[command(subcommand)]
+        action: StashAction,
+    },
+
+    #[command(about = "Fetch from a remote")]
+    Fetch {
+        #[arg(help = "Remote to fetch from (defaults to origin)")]
+        remote: Option<String>,
+        #[arg(long, help = "Prune deleted remote branches")]
+        prune: bool,
+    },
+
+    #[command(about = "Fetch and merge remote changes")]
+    Pull {
+        #[arg(long, help = "Rebase instead of merge")]
+        rebase: bool,
+    },
+
+    #[command(about = "Push commits to a remote")]
+    Push {
+        #[arg(help = "Remote to push to (defaults to origin)")]
+        remote: Option<String>,
+        #[arg(help = "Branch to push (defaults to current)")]
+        branch: Option<String>,
+        #[arg(long, help = "Also push tags")]
+        tags: bool,
+        #[arg(long, help = "Set upstream tracking")]
+        set_upstream: bool,
+    },
+
+    #[command(about = "Annotate a file with the commits that last touched each line")]
+    Blame {
+        #[arg(help = "Path to annotate")]
+        path: String,
     },
 
     #[command(about = "Configure openisl settings")]
@@ -78,9 +202,11 @@ enum Commands {
     Remote {
         #[arg(long, help = "List all remotes")]
         list: bool,
-        #[arg(help = "Add a remote")]
-        add: Option<String>,
-        #[arg(help = "Remove a remote")]
+        #[arg(help = "Remote name to add")]
+        name: Option<String>,
+        #[arg(help = "Remote URL (used with add)")]
+        url: Option<String>,
+        #[arg(long, help = "Remove a remote by name")]
         remove: Option<String>,
     },
 
@@ -94,6 +220,32 @@ enum Commands {
         delete: Option<String>,
         #[arg(short, long, help = "Tag message for annotated tag")]
         message: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum StashAction {
+    #[command(about = "List stashes")]
+    List,
+    #[command(about = "Create a stash")]
+    Push {
+        #[arg(short = 'm', long, help = "Stash message")]
+        message: Option<String>,
+    },
+    #[command(about = "Apply and remove the newest stash")]
+    Pop {
+        #[arg(help = "Stash reference, e.g. stash@{0}")]
+        stash: Option<String>,
+    },
+    #[command(about = "Apply a stash without removing it")]
+    Apply {
+        #[arg(help = "Stash reference, e.g. stash@{0}")]
+        stash: Option<String>,
+    },
+    #[command(about = "Drop a stash")]
+    Drop {
+        #[arg(help = "Stash reference, e.g. stash@{0}")]
+        stash: Option<String>,
     },
 }
 
@@ -112,17 +264,76 @@ fn main() -> Result<()> {
         Commands::Tui => {
             cmd_tui()?;
         }
+        Commands::Init => {
+            cmd_init()?;
+        }
+        Commands::Clone { url, destination } => {
+            cmd_clone(url, destination.as_deref())?;
+        }
         Commands::Branch { name, remote, all } => {
             cmd_branch(name.as_deref(), *remote, *all)?;
         }
         Commands::Checkout { target } => {
             cmd_checkout(target)?;
         }
+        Commands::Add { paths, all } => {
+            cmd_add(paths, *all)?;
+        }
+        Commands::Rm { path } => {
+            cmd_rm(path)?;
+        }
+        Commands::Mv { from, to } => {
+            cmd_mv(from, to)?;
+        }
+        Commands::Commit { message, amend } => {
+            cmd_commit(message.as_deref(), *amend)?;
+        }
+        Commands::Show { commit } => {
+            cmd_show(commit)?;
+        }
         Commands::Status => {
             cmd_status()?;
         }
         Commands::Diff { staged, commit } => {
             cmd_diff(*staged, commit.as_deref())?;
+        }
+        Commands::Merge { target } => {
+            cmd_merge(target)?;
+        }
+        Commands::Rebase {
+            upstream,
+            interactive,
+        } => {
+            cmd_rebase(upstream.as_deref(), *interactive)?;
+        }
+        Commands::Reset { hard, soft, target } => {
+            cmd_reset(*hard, *soft, target.as_deref())?;
+        }
+        Commands::CherryPick { commit } => {
+            cmd_cherry_pick(commit)?;
+        }
+        Commands::Revert { commit } => {
+            cmd_revert(commit)?;
+        }
+        Commands::Stash { action } => {
+            cmd_stash(action)?;
+        }
+        Commands::Fetch { remote, prune } => {
+            cmd_fetch(remote.as_deref(), *prune)?;
+        }
+        Commands::Pull { rebase } => {
+            cmd_pull(*rebase)?;
+        }
+        Commands::Push {
+            remote,
+            branch,
+            tags,
+            set_upstream,
+        } => {
+            cmd_push(remote.as_deref(), branch.as_deref(), *tags, *set_upstream)?;
+        }
+        Commands::Blame { path } => {
+            cmd_blame(path)?;
         }
         Commands::Config {
             show,
@@ -132,8 +343,13 @@ fn main() -> Result<()> {
         } => {
             cmd_config(*show, *reset, theme.as_deref(), *max_commits)?;
         }
-        Commands::Remote { list, add, remove } => {
-            cmd_remote(*list, add.as_deref(), remove.as_deref())?;
+        Commands::Remote {
+            list,
+            name,
+            url,
+            remove,
+        } => {
+            cmd_remote(*list, name.as_deref(), url.as_deref(), remove.as_deref())?;
         }
         Commands::Tag {
             list,
@@ -187,6 +403,28 @@ fn cmd_tui() -> Result<()> {
     openisl_tui::run_tui(commits, current_branch, Some(repo_path))
 }
 
+fn cmd_init() -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+    init(&repo_path)?;
+    println!(
+        "Initialized empty Git repository in {}",
+        repo_path.display()
+    );
+    Ok(())
+}
+
+fn cmd_clone(url: &str, destination: Option<&str>) -> Result<()> {
+    let dest = destination.unwrap_or_else(|| {
+        url.rsplit(['/', ':'])
+            .next()
+            .unwrap_or("repo")
+            .trim_end_matches(".git")
+    });
+    clone(url, dest)?;
+    println!("Cloned '{}' into '{}'", url, dest);
+    Ok(())
+}
+
 fn cmd_branch(name: Option<&str>, remote: bool, all: bool) -> Result<()> {
     let repo_path = std::env::current_dir().context("Not in a directory")?;
 
@@ -228,6 +466,61 @@ fn cmd_checkout(target: &str) -> Result<()> {
     let repo_path = std::env::current_dir().context("Not in a directory")?;
     checkout(&repo_path, target)?;
     println!("Checked out '{}'", target);
+    Ok(())
+}
+
+fn cmd_add(paths: &[String], all: bool) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+
+    if all {
+        stage_all(&repo_path)?;
+        println!("Staged all changes");
+    } else if paths.is_empty() {
+        anyhow::bail!("No paths given. Use `openisl add <paths...>` or `openisl add -A`.");
+    } else {
+        let path_refs: Vec<&str> = paths.iter().map(String::as_str).collect();
+        add_paths(&repo_path, &path_refs)?;
+        println!("Staged {} path(s)", paths.len());
+    }
+
+    Ok(())
+}
+
+fn cmd_rm(path: &str) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+    remove_file(&repo_path, path)?;
+    println!("Removed '{}'", path);
+    Ok(())
+}
+
+fn cmd_mv(from: &str, to: &str) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+    move_file(&repo_path, from, to)?;
+    println!("Moved '{}' to '{}'", from, to);
+    Ok(())
+}
+
+fn cmd_commit(message: Option<&str>, amend: bool) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+
+    if amend {
+        amend_commit(&repo_path, message)?;
+        println!(
+            "Amended commit{}",
+            message.map(|_| " with new message").unwrap_or("")
+        );
+    } else {
+        let message = message.context("A commit message is required: use -m <message>")?;
+        commit(&repo_path, message)?;
+        println!("Created commit");
+    }
+
+    Ok(())
+}
+
+fn cmd_show(commit: &str) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+    print!("{}", get_commit_diff(&repo_path, commit)?);
     Ok(())
 }
 
@@ -273,6 +566,118 @@ fn cmd_diff(staged: bool, commit: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+fn cmd_merge(target: &str) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+    let output = merge(&repo_path, target, false)?;
+    print!("{}", output);
+    Ok(())
+}
+
+fn cmd_rebase(upstream: Option<&str>, interactive: bool) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+    let output = rebase(&repo_path, upstream, interactive)?;
+    print!("{}", output);
+    Ok(())
+}
+
+fn cmd_reset(hard: bool, soft: bool, target: Option<&str>) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+    let mode = if hard {
+        ResetMode::Hard
+    } else if soft {
+        ResetMode::Soft
+    } else {
+        ResetMode::Mixed
+    };
+    let output = reset(&repo_path, mode, target)?;
+    print!("{}", output);
+    Ok(())
+}
+
+fn cmd_cherry_pick(commit: &str) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+    cherry_pick_commit(&repo_path, commit)?;
+    println!("Cherry-picked '{}'", commit);
+    Ok(())
+}
+
+fn cmd_revert(commit: &str) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+    revert_commit(&repo_path, commit)?;
+    println!("Reverted '{}'", commit);
+    Ok(())
+}
+
+fn cmd_stash(action: &StashAction) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+
+    match action {
+        StashAction::List => {
+            let stashes = get_stash_list(&repo_path)?;
+            if stashes.is_empty() {
+                println!("No stashes found");
+            } else {
+                for stash in &stashes {
+                    println!("{} {} ({})", stash.name, stash.message, stash.hash);
+                }
+            }
+        }
+        StashAction::Push { message } => {
+            stash_push(&repo_path, message.as_deref())?;
+            println!("Created stash");
+        }
+        StashAction::Pop { stash } => {
+            stash_pop(&repo_path, stash.as_deref())?;
+            println!("Popped stash");
+        }
+        StashAction::Apply { stash } => {
+            stash_apply(&repo_path, stash.as_deref())?;
+            println!("Applied stash");
+        }
+        StashAction::Drop { stash } => {
+            stash_drop(&repo_path, stash.as_deref())?;
+            println!("Dropped stash");
+        }
+    }
+
+    Ok(())
+}
+
+fn cmd_fetch(remote: Option<&str>, prune: bool) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+    fetch(&repo_path, remote, prune)?;
+    println!("Fetched from '{}'", remote.unwrap_or("origin"));
+    Ok(())
+}
+
+fn cmd_pull(rebase: bool) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+    print!("{}", pull(&repo_path, rebase)?);
+    Ok(())
+}
+
+fn cmd_push(
+    remote: Option<&str>,
+    branch: Option<&str>,
+    tags: bool,
+    set_upstream: bool,
+) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+    push(&repo_path, remote, branch, tags, set_upstream)?;
+    println!(
+        "Pushed to '{}'{}",
+        remote.unwrap_or("origin"),
+        branch.map(|b| format!(" ({})", b)).unwrap_or_default()
+    );
+    Ok(())
+}
+
+fn cmd_blame(path: &str) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+    print!("{}", get_blame(&repo_path, path)?);
+    Ok(())
+}
+
 fn cmd_config(
     show: bool,
     reset: bool,
@@ -314,7 +719,12 @@ fn cmd_config(
     Ok(())
 }
 
-fn cmd_remote(list: bool, add: Option<&str>, remove: Option<&str>) -> Result<()> {
+fn cmd_remote(
+    list: bool,
+    name: Option<&str>,
+    url: Option<&str>,
+    remove: Option<&str>,
+) -> Result<()> {
     let repo_path = std::env::current_dir().context("Not in a directory")?;
 
     if list {
@@ -323,16 +733,21 @@ fn cmd_remote(list: bool, add: Option<&str>, remove: Option<&str>) -> Result<()>
             println!("No remotes configured");
         } else {
             for remote in remotes {
-                println!(
-                    "{}  {} ({})",
-                    remote.name,
-                    remote.url,
-                    remote.fetch_type.trim()
-                );
+                if remote.fetch_type.trim().is_empty() {
+                    println!("{}  {}", remote.name, remote.url);
+                } else {
+                    println!(
+                        "{}  {}  {}",
+                        remote.name,
+                        remote.url,
+                        remote.fetch_type.trim()
+                    );
+                }
             }
         }
-    } else if let Some(_name) = add {
-        println!("Use 'openisl remote add <name> <url>' - URL argument needed");
+    } else if let (Some(name), Some(url)) = (name, url) {
+        remote_add(&repo_path, name, url)?;
+        println!("Added remote '{}' -> {}", name, url);
     } else if let Some(name) = remove {
         remote_remove(&repo_path, name)?;
         println!("Removed remote '{}'", name);
@@ -415,6 +830,27 @@ mod tests {
     }
 
     #[test]
+    fn test_cli_parse_remote_add() {
+        let args = vec![
+            "openisl",
+            "remote",
+            "origin",
+            "https://github.com/bharat94/openISL.git",
+        ];
+        let cli = Cli::parse_from(&args);
+        match &cli.command {
+            Commands::Remote { name, url, .. } => {
+                assert_eq!(name.as_deref(), Some("origin"));
+                assert_eq!(
+                    url.as_deref(),
+                    Some("https://github.com/bharat94/openISL.git")
+                );
+            }
+            _ => panic!("Expected Remote command"),
+        }
+    }
+
+    #[test]
     fn test_cli_parse_tag() {
         let args = vec!["openisl", "tag", "--list"];
         let cli = Cli::parse_from(&args);
@@ -423,6 +859,47 @@ mod tests {
                 assert!(*list);
             }
             _ => panic!("Expected Tag command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parse_commit() {
+        let args = vec!["openisl", "commit", "-m", "fix: bug"];
+        let cli = Cli::parse_from(&args);
+        match &cli.command {
+            Commands::Commit { message, amend } => {
+                assert_eq!(message.as_deref(), Some("fix: bug"));
+                assert!(!amend);
+            }
+            _ => panic!("Expected Commit command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parse_stash_push() {
+        let args = vec!["openisl", "stash", "push", "-m", "wip"];
+        let cli = Cli::parse_from(&args);
+        match &cli.command {
+            Commands::Stash { action } => match action {
+                StashAction::Push { message } => {
+                    assert_eq!(message.as_deref(), Some("wip"));
+                }
+                _ => panic!("Expected stash push"),
+            },
+            _ => panic!("Expected Stash command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parse_add() {
+        let args = vec!["openisl", "add", "src/main.rs", "src/lib.rs"];
+        let cli = Cli::parse_from(&args);
+        match &cli.command {
+            Commands::Add { paths, all } => {
+                assert_eq!(paths.len(), 2);
+                assert!(!all);
+            }
+            _ => panic!("Expected Add command"),
         }
     }
 }

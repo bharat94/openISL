@@ -70,9 +70,25 @@ openisl status
 openisl diff              # unstaged changes
 openisl diff --staged     # staged changes
 openisl diff abc1234      # changes introduced by a commit
+openisl add file.txt      # stage a file
+openisl commit -m "msg"   # commit staged changes
+
+# History operations
+openisl show HEAD         # inspect a commit
+openisl blame file.txt    # who changed each line
+
+# Branch integration
+openisl merge feature/x
+openisl rebase main
+openisl cherry-pick abc1234
+openisl stash push -m "wip"
 
 # Remotes and tags
 openisl remote --list
+openisl remote origin https://github.com/user/repo.git
+openisl fetch
+openisl pull --rebase
+openisl push
 openisl tag               # list tags
 openisl tag v1.0.0        # create a tag
 ```
@@ -113,6 +129,7 @@ See the [Configuration reference](docs/cli-commands/config.md) for all fields an
 
 - [CLI Commands](docs/cli-commands/) — full reference for every command
 - [TUI Reference](docs/tui-reference/tui.md) — layout, keymap, themes
+- [VCS Compatibility Matrix](docs/vcs/compatibility-matrix.md) — how openISL maps to Git, Mercurial, Subversion, Fossil, Darcs, Pijul, and Jujutsu
 - [Architecture](ARCHITECTURE.md) — design and component overview
 - [Changelog](CHANGELOG.md) — release history
 - [Contributing](CONTRIBUTING.md) — how to get involved

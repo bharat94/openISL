@@ -67,27 +67,29 @@ pub fn remote_list(repo_path: &Path) -> Result<Vec<Remote>> {
     let output =
         run(&["remote", "-v"], Some(repo_path)).with_context(|| "Failed to list remotes")?;
 
+    Ok(parse_remote_output(&output))
+}
+
+fn parse_remote_output(output: &str) -> Vec<Remote> {
     let mut remotes = Vec::new();
     for line in output.lines() {
         if line.trim().is_empty() {
             continue;
         }
 
-        let parts: Vec<&str> = line.splitn(3, ' ').collect();
+        let parts: Vec<&str> = line.splitn(2, '\t').collect();
         if parts.len() >= 2 {
+            let mut rest = parts[1].split_whitespace();
+            let url = rest.next().unwrap_or("").to_string();
+            let fetch_type = rest.next().unwrap_or("").to_string();
             remotes.push(Remote {
                 name: parts[0].to_string(),
-                url: parts[1].to_string(),
-                fetch_type: if parts.len() > 2 {
-                    parts[2].to_string()
-                } else {
-                    String::new()
-                },
+                url,
+                fetch_type,
             });
         }
     }
-
-    Ok(remotes)
+    remotes
 }
 
 pub fn remote_remove(repo_path: &Path, name: &str) -> Result<()> {
@@ -113,6 +115,17 @@ mod tests {
         let result = remote_list(&repo_path);
         // Will fail if no remotes, but that's OK
         assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_parse_remote_output() {
+        let output = "origin\t/path/to/repo.git (fetch)\norigin\t/path/to/repo.git (push)\n";
+        let remotes = parse_remote_output(output);
+        assert_eq!(remotes.len(), 2);
+        assert_eq!(remotes[0].name, "origin");
+        assert_eq!(remotes[0].url, "/path/to/repo.git");
+        assert_eq!(remotes[0].fetch_type, "(fetch)");
+        assert_eq!(remotes[1].fetch_type, "(push)");
     }
 
     #[test]
