@@ -25,7 +25,8 @@ pub(crate) use crossterm::event::{
 pub(crate) use crossterm::execute;
 pub(crate) use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
 pub(crate) use openisl_git::operations::hunk::{
-    get_file_diff_hunks, stage_hunk, unstage_hunk, HunkLine, HunkLineType,
+    get_file_diff_hunks, stage_hunk, stage_hunk_lines, unstage_hunk, unstage_hunk_lines,
+    HunkLineType,
 };
 pub(crate) use openisl_git::operations::{
     get_stash_list, stash_apply, stash_drop, stash_pop, stash_show, StashEntry,

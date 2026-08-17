@@ -7,41 +7,28 @@ impl App {
     pub(crate) fn stage_selected_hunks_or_lines(&mut self) {
         if let Some(repo_path) = &self.repo_path {
             if let Some(file) = self.files.get(self.selected_file_index) {
-                // Iterate through hunks and lines to stage selected ones
-                for (hunk_idx, hunk) in self.hunks.iter_mut().enumerate() {
+                let mut staged_any = false;
+                // Only unstaged hunks can be staged. Staged hunks are skipped.
+                for hunk in self.hunks.iter().filter(|h| !h.is_staged) {
                     if hunk.is_selected {
-                        // Stage entire hunk
-                        if let Err(e) = stage_hunk(
-                            repo_path,
-                            Path::new(&file.path),
-                            hunk_idx,
-                            &self.current_file_diff_output,
-                        ) {
+                        if let Err(e) = stage_hunk(repo_path, Path::new(&file.path), hunk) {
                             self.status_message = format!("Error staging hunk: {}", e);
                             return;
                         }
-                    } else {
-                        // Stage selected lines within the hunk
-                        let selected_lines: Vec<&HunkLine> =
-                            hunk.lines.iter().filter(|l| l.is_selected).collect();
-                        if !selected_lines.is_empty() {
-                            // This would require a more complex partial staging mechanism in git operations
-                            // For simplicity, if any line is selected, we'll try to stage the hunk
-                            // A more robust solution would involve creating a patch for only the selected lines.
-                            if let Err(e) = stage_hunk(
-                                repo_path,
-                                Path::new(&file.path),
-                                hunk_idx,
-                                &self.current_file_diff_output,
-                            ) {
-                                self.status_message =
-                                    format!("Error staging selected lines: {}", e);
-                                return;
-                            }
+                        staged_any = true;
+                    } else if hunk.lines.iter().any(|l| l.is_selected) {
+                        if let Err(e) = stage_hunk_lines(repo_path, Path::new(&file.path), hunk) {
+                            self.status_message = format!("Error staging selected lines: {}", e);
+                            return;
                         }
+                        staged_any = true;
                     }
                 }
-                self.status_message = "Staged selected changes".to_string();
+                if !staged_any {
+                    self.status_message = "No unstaged hunks selected".to_string();
+                } else {
+                    self.status_message = "Staged selected changes".to_string();
+                }
                 self.fetch_diff(); // Refresh diff to show updated status
                 self.refresh_files(); // Refresh files panel as well
             } else {
@@ -55,39 +42,28 @@ impl App {
     pub(crate) fn unstage_selected_hunks_or_lines(&mut self) {
         if let Some(repo_path) = &self.repo_path {
             if let Some(file) = self.files.get(self.selected_file_index) {
-                // Iterate through hunks and lines to unstage selected ones
-                for (hunk_idx, hunk) in self.hunks.iter_mut().enumerate() {
+                let mut unstaged_any = false;
+                // Only staged hunks can be unstaged.
+                for hunk in self.hunks.iter().filter(|h| h.is_staged) {
                     if hunk.is_selected {
-                        // Unstage entire hunk
-                        if let Err(e) = unstage_hunk(
-                            repo_path,
-                            Path::new(&file.path),
-                            hunk_idx,
-                            &self.current_file_diff_output,
-                        ) {
+                        if let Err(e) = unstage_hunk(repo_path, Path::new(&file.path), hunk) {
                             self.status_message = format!("Error unstaging hunk: {}", e);
                             return;
                         }
-                    } else {
-                        // Unstage selected lines within the hunk
-                        let selected_lines: Vec<&HunkLine> =
-                            hunk.lines.iter().filter(|l| l.is_selected).collect();
-                        if !selected_lines.is_empty() {
-                            // Similar to staging, this would require a more complex partial unstaging mechanism
-                            if let Err(e) = unstage_hunk(
-                                repo_path,
-                                Path::new(&file.path),
-                                hunk_idx,
-                                &self.current_file_diff_output,
-                            ) {
-                                self.status_message =
-                                    format!("Error unstaging selected lines: {}", e);
-                                return;
-                            }
+                        unstaged_any = true;
+                    } else if hunk.lines.iter().any(|l| l.is_selected) {
+                        if let Err(e) = unstage_hunk_lines(repo_path, Path::new(&file.path), hunk) {
+                            self.status_message = format!("Error unstaging selected lines: {}", e);
+                            return;
                         }
+                        unstaged_any = true;
                     }
                 }
-                self.status_message = "Unstaged selected changes".to_string();
+                if !unstaged_any {
+                    self.status_message = "No staged hunks selected".to_string();
+                } else {
+                    self.status_message = "Unstaged selected changes".to_string();
+                }
                 self.fetch_diff(); // Refresh diff to show updated status
                 self.refresh_files(); // Refresh files panel as well
             } else {

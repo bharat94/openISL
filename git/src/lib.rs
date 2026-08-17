@@ -13,9 +13,9 @@ pub use operations::{
     get_file_diff_hunks, get_file_hunks, get_refs_for_commit, get_staged_files, get_status,
     get_sync_state, has_staged_changes, has_unstaged_changes, open_in_editor, remote_add,
     remote_list, remote_remove, revert_commit, reword_commit, squash_commits, stage_all,
-    stage_file, stage_hunk, stage_hunk_by_lines, tag_commit, tag_list, unstage_all, unstage_file,
-    unstage_hunk, DiffHunk, FileStatus, Hunk, HunkLine, HunkLineType, Remote, SmartLogFormatter,
-    StatusType, Tag,
+    stage_file, stage_hunk, stage_hunk_by_lines, stage_hunk_lines, tag_commit, tag_list,
+    unstage_all, unstage_file, unstage_hunk, unstage_hunk_lines, DiffHunk, FileStatus, Hunk,
+    HunkLine, HunkLineType, Remote, SmartLogFormatter, StatusType, Tag,
 };
 
 pub use vcs::{Change, Ref, RefType as VcsRefType, SyncState};

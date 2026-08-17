@@ -23,7 +23,10 @@ pub use commit::{
 };
 pub use diff::{get_commit_diff, get_diff};
 pub use editor::open_in_editor;
-pub use hunk::{get_file_diff_hunks, stage_hunk, unstage_hunk, Hunk, HunkLine, HunkLineType};
+pub use hunk::{
+    get_file_diff_hunks, stage_hunk, stage_hunk_lines, unstage_hunk, unstage_hunk_lines, Hunk,
+    HunkLine, HunkLineType,
+};
 pub use log::get_commits;
 pub use remote::{fetch, pull, push, remote_add, remote_list, remote_remove, Remote};
 pub use smart_log::SmartLogFormatter;
