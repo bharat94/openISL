@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use openisl_git::{
-    create_tag, delete_tag, get_branches, get_commits, get_current_branch, get_diff, get_status,
-    remote_list, remote_remove, tag_list, SmartLogFormatter, StatusType,
+    checkout, create_branch, create_tag, delete_tag, get_branches, get_commits, get_current_branch,
+    get_diff, get_status, remote_list, remote_remove, tag_list, SmartLogFormatter, StatusType,
 };
 mod config;
 use config::Config;
@@ -109,7 +109,7 @@ fn main() -> Result<()> {
             cmd_log(*simple, branch.as_deref(), *remote, *max_count)?;
         }
         Commands::Tui => {
-            println!("Launching TUI... (Run 'cargo run -p openisl-tui' to use TUI)");
+            cmd_tui()?;
         }
         Commands::Branch { name, remote, all } => {
             cmd_branch(name.as_deref(), *remote, *all)?;
@@ -178,11 +178,20 @@ fn cmd_log(
     Ok(())
 }
 
+fn cmd_tui() -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+    let config = Config::load().unwrap_or_default();
+    let commits = get_commits(&repo_path, Some(config.general.max_commits))?;
+    let current_branch = get_current_branch(&repo_path)?.unwrap_or_else(|| "main".to_string());
+    openisl_tui::run_tui(commits, current_branch, Some(repo_path))
+}
+
 fn cmd_branch(name: Option<&str>, remote: bool, all: bool) -> Result<()> {
     let repo_path = std::env::current_dir().context("Not in a directory")?;
 
     if let Some(branch_name) = name {
-        println!("Creating branch: {}", branch_name);
+        create_branch(&repo_path, branch_name)?;
+        println!("Created branch: {}", branch_name);
     } else {
         let branches = get_branches(&repo_path)?;
         let current = get_current_branch(&repo_path)?;
@@ -215,7 +224,9 @@ fn cmd_branch(name: Option<&str>, remote: bool, all: bool) -> Result<()> {
 }
 
 fn cmd_checkout(target: &str) -> Result<()> {
-    println!("Would checkout: {}", target);
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+    checkout(&repo_path, target)?;
+    println!("Checked out '{}'", target);
     Ok(())
 }
 

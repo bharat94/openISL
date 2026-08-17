@@ -714,6 +714,7 @@ dependencies = [
  "config",
  "dirs",
  "openisl-git",
+ "openisl-tui",
  "serde",
  "toml",
 ]
