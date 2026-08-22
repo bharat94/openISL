@@ -1140,7 +1140,8 @@ mod tests {
 
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert_eq!(app.view_mode, ViewMode::List);
-        assert!(app.status_message.contains("Created branch"));
+        // With no repo_path, create_branch_at_commit reports an error
+        assert!(app.status_message.contains("No repository path"));
     }
 
     #[test]

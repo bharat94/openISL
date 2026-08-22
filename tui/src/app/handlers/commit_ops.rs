@@ -530,4 +530,48 @@ impl App {
             self.is_loading = false;
         }
     }
+
+    pub(crate) fn checkout_commit(&mut self) {
+        if let Some(commit) = self.selected_commit() {
+            if let Some(ref repo_path) = self.repo_path {
+                match openisl_git::checkout_commit(repo_path, &commit.hash) {
+                    Ok(_) => {
+                        self.status_message = format!("Checked out {}", commit.short_hash);
+                        self.refresh_commits();
+                        self.view_mode = ViewMode::List;
+                    }
+                    Err(e) => {
+                        self.status_message = format!("Error checking out commit: {}", e);
+                    }
+                }
+            } else {
+                self.status_message = "No repository path available".to_string();
+            }
+        } else {
+            self.status_message = "No commit selected".to_string();
+        }
+    }
+
+    pub(crate) fn create_branch_at_commit(&mut self) {
+        if let Some(commit) = self.selected_commit() {
+            if !self.branch_input.is_empty() {
+                if let Some(ref repo_path) = self.repo_path {
+                    match openisl_git::create_branch_from_commit(repo_path, &self.branch_input, &commit.hash) {
+                        Ok(_) => {
+                            self.status_message =
+                                format!("Created branch '{}' from {}", self.branch_input, commit.short_hash);
+                            self.refresh_commits();
+                        }
+                        Err(e) => {
+                            self.status_message = format!("Error creating branch: {}", e);
+                        }
+                    }
+                } else {
+                    self.status_message = "No repository path available".to_string();
+                }
+            }
+        } else {
+            self.status_message = "No commit selected".to_string();
+        }
+    }
 }

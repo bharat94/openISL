@@ -269,9 +269,7 @@ impl App {
             KeyCode::Char('j') | KeyCode::Down => self.move_down(),
             KeyCode::Char('k') | KeyCode::Up => self.move_up(),
             KeyCode::Char('c') => {
-                if let Some(commit) = self.selected_commit() {
-                    self.status_message = format!("Would checkout {}!", &commit.short_hash);
-                }
+                self.checkout_commit();
             }
             KeyCode::Char('b') => {
                 self.branch_input.clear();
@@ -297,12 +295,7 @@ impl App {
             }
             KeyCode::Enter => {
                 if !self.branch_input.is_empty() {
-                    if let Some(commit) = self.selected_commit() {
-                        self.status_message = format!(
-                            "Created branch '{}' from {}",
-                            self.branch_input, commit.short_hash
-                        );
-                    }
+                    self.create_branch_at_commit();
                 }
                 self.branch_input.clear();
                 self.view_mode = ViewMode::List;
