@@ -15,7 +15,7 @@
 - **Search, filter & stats** — find commits by message/author/hash, filter by author/message/date, and get repository statistics.
 - **Commit operations** — amend, drop, squash, cherry-pick, and revert from the TUI.
 - **Command palette & themes** — searchable actions, plus dark, light, Monokai, and Nord themes.
-- **Git command wrapper** — `log`, `branch`, `checkout`, `status`, `diff`, `remote`, and `tag` with smart output.
+- **Git command wrapper** — 27+ subcommands from `log`, `status`, and `diff` to `stash`, `bisect`, and `squash`, with smart output. See the [CLI reference](docs/cli-commands/index.md).
 
 ## Installation
 

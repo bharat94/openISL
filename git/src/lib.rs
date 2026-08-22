@@ -8,17 +8,19 @@ pub use command::{find_repo_root, is_git_repo};
 pub use error::GitError;
 pub use models::{Commit, GitRef, RefType};
 pub use operations::{
-    add_paths, amend_commit, checkout, checkout_commit, cherry_pick_commit, clone, commit,
-    create_branch, create_branch_from_commit, create_tag, delete_tag, drop_commit, fetch,
-    get_blame, get_branches, get_commit_diff, get_commit_message, get_commits,
-    get_commits_filtered, get_current_branch, get_diff, get_file_diff_hunks, get_file_hunks,
+    add_paths, amend_commit, apply_patch, bisect_bad, bisect_good, bisect_reset, bisect_skip,
+    bisect_start, checkout, checkout_commit, cherry_pick_commit, clone, commit, create_branch,
+    create_branch_from_commit, create_tag, delete_tag, drop_commit, fetch, get_blame, get_branches,
+    get_commit_diff, get_commit_message, get_commits, get_commits_filtered, get_conflicted_files,
+    get_current_branch, get_diff, get_file_at_revision, get_file_diff_hunks, get_file_hunks,
     get_refs_for_commit, get_staged_files, get_stash_list, get_status, get_sync_state,
-    has_staged_changes, has_unstaged_changes, init, merge, move_file, open_in_editor, pull, push,
-    rebase, remote_add, remote_list, remote_remove, remove_file, reset, revert_commit,
-    reword_commit, squash_commits, stage_all, stage_file, stage_hunk, stage_hunk_by_lines,
-    stage_hunk_lines, stash_apply, stash_drop, stash_pop, stash_push, tag_commit, tag_list,
-    unstage_all, unstage_file, unstage_hunk, unstage_hunk_lines, DiffHunk, FileStatus, Hunk,
-    HunkLine, HunkLineType, Remote, ResetMode, SmartLogFormatter, StashEntry, StatusType, Tag,
+    has_staged_changes, has_unstaged_changes, init, mark_resolved, merge, move_file,
+    open_in_editor, pull, push, rebase, remote_add, remote_list, remote_remove, remove_file, reset,
+    revert_commit, reword_commit, squash_commits, stage_all, stage_file, stage_hunk,
+    stage_hunk_by_lines, stage_hunk_lines, stash_apply, stash_drop, stash_pop, stash_push,
+    tag_commit, tag_list, undo_last, unstage_all, unstage_file, unstage_hunk, unstage_hunk_lines,
+    DiffHunk, FileStatus, Hunk, HunkLine, HunkLineType, Remote, ResetMode, SmartLogFormatter,
+    StashEntry, StatusType, Tag,
 };
 
 pub use vcs::{Change, Ref, RefType as VcsRefType, SyncState};

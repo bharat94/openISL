@@ -40,6 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **VCS compatibility matrix**: `docs/vcs/compatibility-matrix.md` maps git,
   Mercurial, Subversion, Fossil, Darcs, Pijul, and Jujutsu functionality to
   openISL commands, with a coverage table and tiered gap analysis
+- **Six new CLI commands**: `cat` (file contents at a revision), `apply`
+  (patch application), `bisect` (`start`/`good`/`bad`/`skip`/`reset`),
+  `resolve` (list/mark conflicted files), `undo` (reflog-based undo of the
+  last operation), and `squash` (soft-reset squash with a new message)
 
 ### Changed
 - **Refactored the TUI**: the monolithic `app.rs` (4400+ lines) was split into

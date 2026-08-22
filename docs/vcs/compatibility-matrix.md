@@ -34,7 +34,7 @@ Status legend:
 | Diff between commits / show commit | `git show` | `hg export` | `svn diff -c` | `fossil diff` | `darcs diff --from` | `pijul log`/`diff` | `jj show` | `openisl show` | ✅ |
 | Show staged diff | `git diff --cached` | *(none)* | `svn diff --cached`¹ | *(none)* | *(none)* | *(none)* | *(none)* | `openisl diff --staged` | ✅ |
 | Annotate / blame a file | `git blame` | `hg annotate` | `svn blame` | web UI² | `darcs annotate` | `pijul credit` | `jj file annotate` | `openisl blame` | ✅ |
-| Print file contents at a revision | `git show <rev>:<file>` | `hg cat` | `svn cat` | `fossil cat` | `darcs show contents` | *(none)* | `jj file show` | `openisl cat` | ⬜ |
+| Print file contents at a revision | `git show <rev>:<file>` | `hg cat` | `svn cat` | `fossil cat` | `darcs show contents` | *(none)* | `jj file show` | `openisl cat` | ✅ |
 | Untracked files list | `git status --short` | `hg status -u` | `svn status` | `fossil extra` | `darcs whatsnew` | `pijul diff` | `jj status` | `openisl status` | ✅ |
 
 ¹ Subversion has no staging area either; `--cached` shown for Git comparison only. ² Fossil tracks annotations in its web interface.
@@ -54,7 +54,7 @@ Status legend:
 | Revert a change | `git revert` | `hg backout` | `svn merge --reverse` | `fossil merge --backout` | `darcs revert` | `pijul unrecord` | `jj revert` | `openisl revert` | ✅ |
 | Tag a revision | `git tag` | `hg tag` | `svn copy` | `fossil tag` | `darcs tag` | *(none)* | `jj tag set` | `openisl tag` | ✅ |
 | Reset/move HEAD | `git reset` | `hg strip`/`hg update -C` | *(centralized)* | `fossil update` | `darcs obliterate` | `pijul unrecord` | `jj abandon`/`jj undo` | `openisl reset` | ✅ |
-| Undo the last operation | `git reset --hard` / reflog | `hg strip` | *(none)* | `fossil undo` | `darcs unrecord` | `pijul unrecord` | `jj undo` | `openisl undo` | ⬜ |
+| Undo the last operation | `git reset --hard` / reflog | `hg strip` | *(none)* | `fossil undo` | `darcs unrecord` | `pijul unrecord` | `jj undo` | `openisl undo` | ✅ |
 
 ---
 
@@ -75,14 +75,14 @@ Status legend:
 | Operation | Git | Mercurial | Subversion | Fossil | Darcs | Pijul | Jujutsu | openISL | Status |
 |---|---|---|---|---|---|---|---|---|---|
 | Amend the last commit | `git commit --amend` | `hg amend` | *(none)* | *(none)* | `darcs amend-record` | `pijul record --amend` | `jj describe` | `openisl commit --amend` | ✅ |
-| Squash commits | `git rebase -i` | `hg histedit`/`fold` | *(none)* | *(none)* | `darcs pull --compress` | `pijul record` (re-record) | `jj squash` | `openisl squash` | 🟡 |
+| Squash commits | `git rebase -i` | `hg histedit`/`fold` | *(none)* | *(none)* | `darcs pull --compress` | `pijul record` (re-record) | `jj squash` | `openisl squash` | ✅ |
 | Stash uncommitted work | `git stash` | `hg shelve` | `svn copy` | *(none)* | *(none)* | *(none)* | `jj new` (implied) | `openisl stash` | ✅ |
-| Bisect (find a bad commit) | `git bisect` | `hg bisect` | *(none)* | `fossil bisect` | *(none)* | *(none)* | `jj bisect` | `openisl bisect` | ⬜ |
-| Resolve merge conflicts | `git mergetool` | `hg resolve` | `svn resolve` | `fossil 3-way-merge` | `darcs mark-conflicts` | `pijul resolve` | `jj resolve` | `openisl resolve` | ⬜ |
-| Split a change | `git add -p`/`rebase -i` | `hg split` | *(none)* | *(none)* | `darcs record` (partial) | `pijul record` (partial) | `jj split` | `openisl split` | ⬜ |
+| Bisect (find a bad commit) | `git bisect` | `hg bisect` | *(none)* | `fossil bisect` | *(none)* | *(none)* | `jj bisect` | `openisl bisect` | ✅ |
+| Resolve merge conflicts | `git mergetool` | `hg resolve` | `svn resolve` | `fossil 3-way-merge` | `darcs mark-conflicts` | `pijul resolve` | `jj resolve` | `openisl resolve` | ✅ |
+| Split a change | `git add -p`/`rebase -i` | `hg split` | *(none)* | *(none)* | `darcs record` (partial) | `pijul record` (partial) | `jj split` | `openisl split` | 🟡 |
 | Interactive history rewrite | `git rebase -i` | `hg histedit` | *(none)* | *(none)* | `darcs record --edit` | `pijul record` | `jj squash`/`split`/`rebase` | *(TUI commit ops)* | 🔶 |
 | Drop a commit | `git reset --hard` | `hg strip` | *(none)* | *(none)* | `darcs obliterate` | `pijul obliterate` | `jj abandon` | `openisl reset` | ✅ |
-| Apply a patch | `git apply` / `git am` | `hg import` | `svn patch` | *(none)* | `darcs apply` | `pijul apply` | `jj diff` + edit | `openisl apply` | ⬜ |
+| Apply a patch | `git apply` / `git am` | `hg import` | `svn patch` | *(none)* | `darcs apply` | `pijul apply` | `jj diff` + edit | `openisl apply` | ✅ |
 | Submodules / nested repos | `git submodule` | `hg subrepos` | `svn externals` | *(none)* | *(none)* | *(none)* | `jj submodule` | *(none)* | ⬜ |
 
 ---
@@ -113,11 +113,11 @@ Current CLI surface and its status:
 | `openisl merge` / `rebase` | integration | ✅ |
 | `openisl reset` | move HEAD | ✅ |
 | `openisl blame` | file annotation | ✅ |
-| `openisl bisect` | bug hunting | ⬜ |
-| `openisl cat` | file at revision | ⬜ |
-| `openisl undo` | operation undo | ⬜ |
-| `openisl resolve` | conflict resolution | ⬜ |
-| `openisl apply` | patch application | ⬜ |
+| `openisl bisect` | bug hunting | ✅ |
+| `openisl cat` | file at revision | ✅ |
+| `openisl undo` | operation undo | ✅ |
+| `openisl resolve` | conflict resolution | ✅ |
+| `openisl apply` | patch application | ✅ |
 
 ## Gap Analysis
 

@@ -1,12 +1,14 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use openisl_git::{
-    add_paths, amend_commit, checkout, cherry_pick_commit, clone, commit, create_branch,
-    create_tag, delete_tag, fetch, get_blame, get_branches, get_commit_diff, get_commits,
-    get_commits_filtered, get_current_branch, get_diff, get_stash_list, get_status, init, merge,
-    move_file, pull, push, rebase, remote_add, remote_list, remote_remove, remove_file, reset,
-    revert_commit, stage_all, stash_apply, stash_drop, stash_pop, stash_push, tag_list, ResetMode,
-    SmartLogFormatter, StatusType,
+    add_paths, amend_commit, apply_patch, bisect_bad, bisect_good, bisect_reset, bisect_skip,
+    bisect_start, checkout, cherry_pick_commit, clone, commit, create_branch, create_tag,
+    delete_tag, fetch, get_blame, get_branches, get_commit_diff, get_commits, get_commits_filtered,
+    get_conflicted_files, get_current_branch, get_diff, get_file_at_revision, get_stash_list,
+    get_status, init, mark_resolved, merge, move_file, pull, push, rebase, remote_add, remote_list,
+    remote_remove, remove_file, reset, revert_commit, squash_commits, stage_all, stash_apply,
+    stash_drop, stash_pop, stash_push, tag_list, undo_last, ResetMode, SmartLogFormatter,
+    StatusType,
 };
 mod config;
 use config::Config;
@@ -221,6 +223,72 @@ enum Commands {
         #[arg(short, long, help = "Tag message for annotated tag")]
         message: Option<String>,
     },
+
+    #[command(about = "Print file contents at a revision")]
+    Cat {
+        #[arg(help = "Revision, e.g. HEAD or abc1234")]
+        revision: String,
+        #[arg(help = "Path to print")]
+        path: String,
+    },
+
+    #[command(about = "Apply a patch file")]
+    Apply {
+        #[arg(help = "Patch file to apply")]
+        patch: String,
+        #[arg(long, help = "Apply to the index instead of the working tree")]
+        cached: bool,
+    },
+
+    #[command(about = "Find the commit that introduced a bug")]
+    Bisect {
+        #[command(subcommand)]
+        action: BisectAction,
+    },
+
+    #[command(about = "List or resolve merge conflicts")]
+    Resolve {
+        #[arg(long, help = "List conflicted files")]
+        list: bool,
+        #[arg(help = "Paths to mark as resolved")]
+        paths: Vec<String>,
+    },
+
+    #[command(about = "Undo the last operation (destructive)")]
+    Undo,
+
+    #[command(about = "Squash commits up to a revision into one")]
+    Squash {
+        #[arg(help = "Commit to squash up to (inclusive)")]
+        commit: String,
+        #[arg(short, long, help = "Message for the squashed commit")]
+        message: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum BisectAction {
+    #[command(about = "Start a bisect session")]
+    Start {
+        #[arg(help = "Known-bad revision")]
+        bad: String,
+        #[arg(help = "Known-good revision")]
+        good: String,
+    },
+    #[command(about = "Mark current revision as good")]
+    Good {
+        #[arg(help = "Optional revision to mark")]
+        revision: Option<String>,
+    },
+    #[command(about = "Mark current revision as bad")]
+    Bad {
+        #[arg(help = "Optional revision to mark")]
+        revision: Option<String>,
+    },
+    #[command(about = "Skip the current revision")]
+    Skip,
+    #[command(about = "End the bisect session")]
+    Reset,
 }
 
 #[derive(Subcommand)]
@@ -363,6 +431,24 @@ fn main() -> Result<()> {
                 delete.as_deref(),
                 message.as_deref(),
             )?;
+        }
+        Commands::Cat { revision, path } => {
+            cmd_cat(revision, path)?;
+        }
+        Commands::Apply { patch, cached } => {
+            cmd_apply(patch, *cached)?;
+        }
+        Commands::Bisect { action } => {
+            cmd_bisect(action)?;
+        }
+        Commands::Resolve { list, paths } => {
+            cmd_resolve(*list, paths)?;
+        }
+        Commands::Undo => {
+            cmd_undo()?;
+        }
+        Commands::Squash { commit, message } => {
+            cmd_squash(commit, message)?;
         }
     }
 
@@ -784,6 +870,89 @@ fn cmd_tag(
     Ok(())
 }
 
+fn cmd_cat(revision: &str, path: &str) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+    print!("{}", get_file_at_revision(&repo_path, revision, path)?);
+    Ok(())
+}
+
+fn cmd_apply(patch: &str, cached: bool) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+    apply_patch(&repo_path, patch, cached)?;
+    println!(
+        "Applied '{}'{}",
+        patch,
+        if cached { " to index" } else { "" }
+    );
+    Ok(())
+}
+
+fn cmd_bisect(action: &BisectAction) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+
+    match action {
+        BisectAction::Start { bad, good } => {
+            let log = bisect_start(&repo_path, bad, good)?;
+            print!("{}", log);
+            println!("\nBisecting: check out the listed revision, test it, then mark it good/bad.");
+        }
+        BisectAction::Good { revision } => {
+            print!("{}", bisect_good(&repo_path, revision.as_deref())?);
+        }
+        BisectAction::Bad { revision } => {
+            print!("{}", bisect_bad(&repo_path, revision.as_deref())?);
+        }
+        BisectAction::Skip => {
+            print!("{}", bisect_skip(&repo_path)?);
+        }
+        BisectAction::Reset => {
+            bisect_reset(&repo_path)?;
+            println!("Bisect session ended.");
+        }
+    }
+
+    Ok(())
+}
+
+fn cmd_resolve(list: bool, paths: &[String]) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+
+    if list {
+        let conflicted = get_conflicted_files(&repo_path)?;
+        if conflicted.is_empty() {
+            println!("No conflicted files");
+        } else {
+            for path in conflicted {
+                println!("{}", path);
+            }
+        }
+    } else if paths.is_empty() {
+        anyhow::bail!(
+            "No paths given. Use `openisl resolve <paths...>` or `openisl resolve --list`."
+        );
+    } else {
+        let path_refs: Vec<&str> = paths.iter().map(String::as_str).collect();
+        mark_resolved(&repo_path, &path_refs)?;
+        println!("Marked {} file(s) as resolved", paths.len());
+    }
+
+    Ok(())
+}
+
+fn cmd_undo() -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+    undo_last(&repo_path)?;
+    println!("Undid the last operation.");
+    Ok(())
+}
+
+fn cmd_squash(commit: &str, message: &str) -> Result<()> {
+    let repo_path = std::env::current_dir().context("Not in a directory")?;
+    squash_commits(&repo_path, commit, message)?;
+    println!("Squashed commits up to '{}' into one", commit);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -900,6 +1069,48 @@ mod tests {
                 assert!(!all);
             }
             _ => panic!("Expected Add command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parse_cat() {
+        let args = vec!["openisl", "cat", "HEAD", "src/main.rs"];
+        let cli = Cli::parse_from(&args);
+        match &cli.command {
+            Commands::Cat { revision, path } => {
+                assert_eq!(revision, "HEAD");
+                assert_eq!(path, "src/main.rs");
+            }
+            _ => panic!("Expected Cat command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parse_bisect_start() {
+        let args = vec!["openisl", "bisect", "start", "badhash", "goodhash"];
+        let cli = Cli::parse_from(&args);
+        match &cli.command {
+            Commands::Bisect { action } => match action {
+                BisectAction::Start { bad, good } => {
+                    assert_eq!(bad, "badhash");
+                    assert_eq!(good, "goodhash");
+                }
+                _ => panic!("Expected bisect start"),
+            },
+            _ => panic!("Expected Bisect command"),
+        }
+    }
+
+    #[test]
+    fn test_cli_parse_resolve() {
+        let args = vec!["openisl", "resolve", "a.txt"];
+        let cli = Cli::parse_from(&args);
+        match &cli.command {
+            Commands::Resolve { list, paths } => {
+                assert!(!list);
+                assert_eq!(paths.len(), 1);
+            }
+            _ => panic!("Expected Resolve command"),
         }
     }
 }

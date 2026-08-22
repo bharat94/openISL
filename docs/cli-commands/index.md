@@ -32,6 +32,12 @@ Complete reference for all `openisl` command-line commands. openISL is a Git wra
 | [`openisl config`](config.md) | View and update settings | — |
 | [`openisl remote`](remote.md) | List, add, or remove remotes | `git remote` |
 | [`openisl tag`](tag.md) | List, create, or delete tags | `git tag` |
+| [`openisl cat`](cat.md) | Print file contents at a revision | `git show <rev>:<path>` |
+| [`openisl apply`](apply.md) | Apply a patch file | `git apply` |
+| [`openisl bisect`](bisect.md) | Binary-search history for a bug | `git bisect` |
+| [`openisl resolve`](resolve.md) | List or resolve merge conflicts | `git diff --diff-filter=U`, `git add` |
+| [`openisl undo`](undo.md) | Undo the last operation via reflog | `git reset --hard HEAD@{1}` |
+| [`openisl squash`](squash.md) | Squash commits into one | `git reset --soft`, `git commit` |
 
 ## Common Behavior
 
