@@ -112,7 +112,7 @@ impl App {
         repo_path: Option<std::path::PathBuf>,
     ) -> Self {
         let all_branches = if let Some(ref path) = repo_path {
-            openisl_git::get_branches(path).unwrap_or_default()
+            openisl_git::get_branches(path, false, true).unwrap_or_default()
         } else {
             Vec::new()
         };

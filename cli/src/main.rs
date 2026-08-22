@@ -518,7 +518,7 @@ fn cmd_branch(name: Option<&str>, remote: bool, all: bool) -> Result<()> {
         create_branch(&repo_path, branch_name)?;
         println!("Created branch: {}", branch_name);
     } else {
-        let branches = get_branches(&repo_path)?;
+        let branches = get_branches(&repo_path, remote, all)?;
         let current = get_current_branch(&repo_path)?;
 
         let filtered_branches: Vec<_> = branches

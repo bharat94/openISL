@@ -3,12 +3,15 @@ use crate::models::{GitRef, RefType};
 use anyhow::{Context, Result};
 use std::path::Path;
 
-pub fn get_branches(repo_path: &Path) -> Result<Vec<GitRef>> {
-    let output = run(
-        &["branch", "--format=%(refname:short)|%(refname:short)"],
-        Some(repo_path),
-    )
-    .with_context(|| "Failed to get git branches")?;
+pub fn get_branches(repo_path: &Path, remote: bool, all: bool) -> Result<Vec<GitRef>> {
+    let mut args = vec!["branch"];
+    if remote || all {
+        args.push("-a");
+    }
+    args.push("--format=%(refname:short)|%(refname:short)");
+
+    let output = run(&args, Some(repo_path))
+        .with_context(|| "Failed to get git branches")?;
 
     let mut refs = Vec::new();
     for line in output.lines() {
@@ -156,7 +159,7 @@ mod tests {
     #[test]
     fn test_get_branches() {
         let repo_path = std::env::current_dir().unwrap();
-        let result = get_branches(&repo_path);
+        let result = get_branches(&repo_path, false, false);
         // This will fail if not in a repo, but that's expected
         assert!(result.is_ok() || result.is_err());
     }

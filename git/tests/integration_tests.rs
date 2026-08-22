@@ -63,7 +63,7 @@ mod git_operations_tests {
     #[test]
     fn test_get_branches_returns_refs() {
         let repo_path = std::env::current_dir().unwrap();
-        let result = get_branches(&repo_path);
+        let result = get_branches(&repo_path, false, false);
         assert!(result.is_ok());
         let branches = result.unwrap();
         assert!(!branches.is_empty());
@@ -143,7 +143,7 @@ mod git_operations_tests {
 
     #[test]
     fn test_branches_have_valid_names() {
-        let branches = get_branches(&std::env::current_dir().unwrap()).unwrap();
+        let branches = get_branches(&std::env::current_dir().unwrap(), false, false).unwrap();
         for branch in branches {
             assert!(!branch.name.is_empty());
         }
@@ -151,7 +151,7 @@ mod git_operations_tests {
 
     #[test]
     fn test_branches_have_ref_types() {
-        let branches = get_branches(&std::env::current_dir().unwrap()).unwrap();
+        let branches = get_branches(&std::env::current_dir().unwrap(), false, false).unwrap();
         for branch in branches {
             match branch.ref_type {
                 RefType::Branch | RefType::Remote | RefType::Tag | RefType::Head => {}
