@@ -483,7 +483,7 @@ fn cmd_log(
 
 fn cmd_tui() -> Result<()> {
     let repo_path = std::env::current_dir().context("Not in a directory")?;
-    let config = Config::load().unwrap_or_default();
+    let config = Config::load().context("Failed to load config")?;
     let commits = get_commits(&repo_path, Some(config.general.max_commits))?;
     let current_branch = get_current_branch(&repo_path)?.unwrap_or_else(|| "main".to_string());
     openisl_tui::run_tui(commits, current_branch, Some(repo_path))
@@ -781,20 +781,27 @@ fn cmd_config(
         return Ok(());
     }
 
-    let mut config = Config::load().unwrap_or_default();
+    let mut config = Config::load().context("Failed to load config")?;
+    let mut modified = false;
 
     if let Some(t) = theme {
-        if t == "dark" || t == "light" {
-            config.tui.theme = t.to_string();
-            println!("Theme set to: {}", t);
-        } else {
-            println!("Invalid theme. Use 'dark' or 'light'.");
+        match t {
+            "dark" | "light" | "monokai" | "nord" => {
+                config.tui.theme = t.to_string();
+                println!("Theme set to: {}", t);
+                modified = true;
+            }
+            _ => {
+                eprintln!("Invalid theme. Use 'dark', 'light', 'monokai', or 'nord'.");
+                std::process::exit(1);
+            }
         }
     }
 
     if let Some(n) = max_commits {
         config.general.max_commits = n;
         println!("Max commits set to: {}", n);
+        modified = true;
     }
 
     if show || (theme.is_none() && max_commits.is_none()) {
@@ -805,7 +812,9 @@ fn cmd_config(
         println!("  Auto Fetch: {}", config.git.auto_fetch);
     }
 
-    config.save()?;
+    if modified {
+        config.save()?;
+    }
     Ok(())
 }
 
