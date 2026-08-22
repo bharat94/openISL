@@ -36,11 +36,6 @@ pub fn push(
 ) -> Result<String> {
     let mut args = vec!["push"];
 
-    if tags {
-        args.push("--tags");
-        return run(&args, Some(repo_path)).with_context(|| "Failed to push tags");
-    }
-
     if let Some(r) = remote {
         args.push(r);
     }
@@ -51,6 +46,10 @@ pub fn push(
 
     if set_upstream {
         args.push("--set-upstream");
+    }
+
+    if tags {
+        args.push("--tags");
     }
 
     run(&args, Some(repo_path)).with_context(|| "Failed to push changes")

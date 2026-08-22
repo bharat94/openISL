@@ -750,11 +750,15 @@ fn cmd_push(
 ) -> Result<()> {
     let repo_path = std::env::current_dir().context("Not in a directory")?;
     push(&repo_path, remote, branch, tags, set_upstream)?;
-    println!(
-        "Pushed to '{}'{}",
-        remote.unwrap_or("origin"),
-        branch.map(|b| format!(" ({})", b)).unwrap_or_default()
-    );
+    if tags {
+        println!("Pushed tags");
+    } else {
+        println!(
+            "Pushed to '{}'{}",
+            remote.unwrap_or("origin"),
+            branch.map(|b| format!(" ({})", b)).unwrap_or_default()
+        );
+    }
     Ok(())
 }
 
