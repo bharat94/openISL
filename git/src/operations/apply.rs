@@ -8,6 +8,7 @@ pub fn apply_patch(repo_path: &Path, patch: &str, staged: bool) -> Result<()> {
     if staged {
         args.push("--cached");
     }
+    args.push("--");
     args.push(patch);
     run_success(&args, Some(repo_path))
         .with_context(|| format!("Failed to apply patch '{}'", patch))?;

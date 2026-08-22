@@ -3,13 +3,13 @@ use anyhow::{Context, Result};
 use std::path::Path;
 
 pub fn checkout(repo_path: &Path, target: &str) -> Result<()> {
-    let args = vec!["checkout", target];
+    let args = vec!["checkout", "--", target];
     run(&args, Some(repo_path)).with_context(|| format!("Failed to checkout '{}'", target))?;
     Ok(())
 }
 
 pub fn checkout_commit(repo_path: &Path, commit_hash: &str) -> Result<()> {
-    let args = vec!["checkout", commit_hash];
+    let args = vec!["checkout", "--", commit_hash];
     run(&args, Some(repo_path))
         .with_context(|| format!("Failed to checkout commit '{}'", commit_hash))?;
     Ok(())

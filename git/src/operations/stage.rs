@@ -113,14 +113,14 @@ fn extract_diff_header(diff: &str) -> String {
 }
 
 pub fn stage_file(repo_path: &Path, file: &str) -> Result<()> {
-    run(&["add", file], Some(repo_path))
+    run(&["add", "--", file], Some(repo_path))
         .with_context(|| format!("Failed to stage file: {}", file))?;
     Ok(())
 }
 
 /// Stage the given list of paths (also stages new and removed files).
 pub fn add_paths(repo_path: &Path, paths: &[&str]) -> Result<()> {
-    let mut args = vec!["add"];
+    let mut args = vec!["add", "--"];
     args.extend_from_slice(paths);
 
     run(&args, Some(repo_path)).with_context(|| "Failed to add paths")?;
@@ -129,7 +129,7 @@ pub fn add_paths(repo_path: &Path, paths: &[&str]) -> Result<()> {
 
 /// Remove a tracked file from the working tree and the index (`git rm`).
 pub fn remove_file(repo_path: &Path, file: &str) -> Result<()> {
-    run(&["rm", file], Some(repo_path))
+    run(&["rm", "--", file], Some(repo_path))
         .with_context(|| format!("Failed to remove file: {}", file))?;
     Ok(())
 }

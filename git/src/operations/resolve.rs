@@ -16,7 +16,7 @@ pub fn get_conflicted_files(repo_path: &Path) -> Result<Vec<String>> {
 
 /// Mark one or more conflicted files as resolved by staging them.
 pub fn mark_resolved(repo_path: &Path, paths: &[&str]) -> Result<()> {
-    let mut args = vec!["add"];
+    let mut args = vec!["add", "--"];
     args.extend_from_slice(paths);
     run_success(&args, Some(repo_path)).with_context(|| "Failed to mark files as resolved")?;
     Ok(())
