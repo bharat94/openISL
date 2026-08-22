@@ -10,8 +10,7 @@ pub fn get_branches(repo_path: &Path, remote: bool, all: bool) -> Result<Vec<Git
     }
     args.push("--format=%(refname:short)|%(refname:short)");
 
-    let output = run(&args, Some(repo_path))
-        .with_context(|| "Failed to get git branches")?;
+    let output = run(&args, Some(repo_path)).with_context(|| "Failed to get git branches")?;
 
     let mut refs = Vec::new();
     for line in output.lines() {

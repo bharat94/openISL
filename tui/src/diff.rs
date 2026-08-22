@@ -924,12 +924,10 @@ impl DiffParser {
             match line.line_type {
                 DiffLineType::Addition => additions += 1,
                 DiffLineType::Deletion => deletions += 1,
-                DiffLineType::Header => {
-                    if line.content.starts_with("+++") {
-                        files_changed += 1;
-                        if let Some(path) = line.content.strip_prefix("+++ b/") {
-                            current_file = path.to_string();
-                        }
+                DiffLineType::Header if line.content.starts_with("+++") => {
+                    files_changed += 1;
+                    if let Some(path) = line.content.strip_prefix("+++ b/") {
+                        current_file = path.to_string();
                     }
                 }
                 _ => {}

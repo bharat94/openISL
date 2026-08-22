@@ -556,10 +556,16 @@ impl App {
         if let Some(commit) = self.selected_commit() {
             if !self.branch_input.is_empty() {
                 if let Some(ref repo_path) = self.repo_path {
-                    match openisl_git::create_branch_from_commit(repo_path, &self.branch_input, &commit.hash) {
+                    match openisl_git::create_branch_from_commit(
+                        repo_path,
+                        &self.branch_input,
+                        &commit.hash,
+                    ) {
                         Ok(_) => {
-                            self.status_message =
-                                format!("Created branch '{}' from {}", self.branch_input, commit.short_hash);
+                            self.status_message = format!(
+                                "Created branch '{}' from {}",
+                                self.branch_input, commit.short_hash
+                            );
                             self.refresh_commits();
                         }
                         Err(e) => {

@@ -216,11 +216,11 @@ impl App {
             KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.prev_search_result()
             }
-            KeyCode::Char(c) => {
-                if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ' ' || c == '.' {
-                    self.search_query.push(c);
-                    self.search();
-                }
+            KeyCode::Char(c)
+                if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == ' ' || c == '.' =>
+            {
+                self.search_query.push(c);
+                self.search();
             }
             _ => {}
         }
@@ -243,17 +243,16 @@ impl App {
                 self.branch_search_query.pop();
                 self.filter_branches();
             }
-            KeyCode::Char(c) => {
+            KeyCode::Char(c)
                 if c.is_ascii_alphanumeric()
                     || c == '-'
                     || c == '_'
                     || c == ' '
                     || c == '.'
-                    || c == '/'
-                {
-                    self.branch_search_query.push(c);
-                    self.filter_branches();
-                }
+                    || c == '/' =>
+            {
+                self.branch_search_query.push(c);
+                self.filter_branches();
             }
             _ => {}
         }
@@ -304,10 +303,8 @@ impl App {
             KeyCode::Backspace => {
                 self.branch_input.pop();
             }
-            KeyCode::Char(c) => {
-                if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '/' {
-                    self.branch_input.push(c);
-                }
+            KeyCode::Char(c) if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '/' => {
+                self.branch_input.push(c);
             }
             _ => {}
         }
@@ -413,16 +410,15 @@ impl App {
                 self.filter_mode = FilterMode::Date;
                 self.status_message = "Filtering by date (YYYY-MM-DD)...".to_string();
             }
-            KeyCode::Char(c) => {
+            KeyCode::Char(c)
                 if c.is_ascii_alphanumeric()
                     || c == '-'
                     || c == '_'
                     || c == ' '
                     || c == '.'
-                    || c == '@'
-                {
-                    self.filter_input.push(c);
-                }
+                    || c == '@' =>
+            {
+                self.filter_input.push(c);
             }
             _ => {}
         }
@@ -468,10 +464,8 @@ impl App {
                     self.command_palette_results.rotate_right(1);
                 }
             }
-            KeyCode::Down => {
-                if !self.command_palette_results.is_empty() {
-                    self.command_palette_results.rotate_left(1);
-                }
+            KeyCode::Down if !self.command_palette_results.is_empty() => {
+                self.command_palette_results.rotate_left(1);
             }
             _ => {}
         }
